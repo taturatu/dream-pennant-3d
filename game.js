@@ -383,7 +383,7 @@ function popupN(txt,color){const d=document.createElement('div');d.className='po
   d.style.left=(38+Math.random()*24)+'%';d.style.top='30%';document.body.appendChild(d);setTimeout(()=>d.remove(),1300);}
 function flash(){const f=$('flash');f.style.opacity=0.85;setTimeout(()=>f.style.opacity=0,130);}
 function toast(msg,ms){const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),ms||2400);}
-function banner(msg,ms){const b=$('big-banner');b.textContent=msg;b.classList.remove('hidden');clearTimeout(b._h);b._h=setTimeout(()=>b.classList.add('hidden'),ms||1700);}
+function banner(msg,ms){const b=$('big-banner');b.textContent=msg;b.classList.remove('hidden');b.style.animation='none';void b.offsetWidth;b.style.animation='';clearTimeout(b._h);b._h=setTimeout(()=>b.classList.add('hidden'),ms||1700);}
 let modalCb=null;
 function modal(title,html,cb){sfx('ui');$('modal-title').innerHTML=title;$('modal-body').innerHTML=html;$('modal').classList.remove('hidden');modalCb=cb||null;}
 function closeModal(){$('modal').classList.add('hidden');if(modalCb){const c=modalCb;modalCb=null;c();}}
@@ -442,7 +442,7 @@ let renderer,scene,camera,ballMesh,stadiumGroup,boardCanvas,boardCtx,boardTex;
 let P3={fielders:[],runners:[null,null,null]};
 let camMode='hub',camAngle=0,ballTrail=[];
 const tweens=[];let slowmo=1,speedMul=1;
-let freezeT=0,slowT=0,shakeAmp=0; // 打撃演出：ヒットストップ・打球スロー・シェイク
+let freezeT=0,slowT=0,shakeAmp=0,fovPunch=0; // 打撃演出：ヒットストップ・打球スロー・シェイク・FOVパンチ
 function addTween(dur,fn,done,ease){tweens.push({t:0,dur,fn,done,ease:ease||(x=>x)});}
 function stepTweens(dt){
   for(let i=tweens.length-1;i>=0;i--){const tw=tweens[i];tw.t+=dt*slowmo*speedMul*(freezeT>0?0.06:1)*(slowT>0?0.45:1);const p=clamp(tw.t/tw.dur,0,1);tw.fn(tw.ease(p));if(p>=1){tweens.splice(i,1);if(tw.done)tw.done();}}
@@ -738,8 +738,13 @@ function updateCamera(dt){
   else if(camMode==='outfield'){camera.position.set(0,20,-34);camera.lookAt(0,0,10);}
   else if(camMode==='follow'&&ballMesh){camera.position.lerp(new THREE.Vector3(ballMesh.position.x*0.7,7,ballMesh.position.z+13),0.12);camera.lookAt(ballMesh.position);}
   if(shakeAmp>0.003){camera.position.x+=rf(-1,1)*shakeAmp;camera.position.y+=rf(-1,1)*shakeAmp*0.7;}
+  const nf=55-fovPunch*8;if(Math.abs(camera.fov-nf)>0.05){camera.fov=nf;camera.updateProjectionMatrix();}
 }
 let ballTrailLine=null,trailPts=[];
+function updateTrail(){ // 打球トレイル：頭が明るく尾が消えるグラデーション（加算合成）
+  if(!ballTrailLine)return;const n=trailPts.length,posA=ballTrailLine.geometry.attributes.position,colA=ballTrailLine.geometry.attributes.color;
+  for(let i=0;i<26;i++){const p=trailPts[Math.min(i,Math.max(0,n-1))];if(p){posA.setXYZ(i,p.x,p.y,p.z);}const f=n>1?Math.pow(i/(n-1),1.7):0;colA.setXYZ(i,f,f,f);}
+  ballTrailLine.geometry.setDrawRange(0,n);posA.needsUpdate=true;colA.needsUpdate=true;}
 function initGL(){
   const cv=$('gl');
   renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
@@ -753,16 +758,17 @@ function initGL(){
   scene.add(light);scene.userData.sun=light;
   scene.add(new THREE.HemisphereLight(0xcfe8ff,0x3a6b35,0.5));
   scene.add(new THREE.AmbientLight(0xffffff,0.32));
-  ballTrailLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.5}));
+  const tg=new THREE.BufferGeometry();tg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(26*3),3));tg.setAttribute('color',new THREE.BufferAttribute(new Float32Array(26*3),3));
+  ballTrailLine=new THREE.Line(tg,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false}));
   ballTrailLine.frustumCulled=false;scene.add(ballTrailLine);
   function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
   addEventListener('resize',resize);resize();
   let last=performance.now(),frameAcc=0,frameN=0,qualityChecked=false;
-  (function loop(now){requestAnimationFrame(loop);const dt=Math.min(0.05,(now-last)/1000);last=now;stepTweens(dt);if(freezeT>0)freezeT-=dt;if(slowT>0)slowT-=dt;if(shakeAmp>0)shakeAmp=Math.max(0,shakeAmp-dt*1.5);tickMeter(now);
+  (function loop(now){requestAnimationFrame(loop);const dt=Math.min(0.05,(now-last)/1000);last=now;stepTweens(dt);if(freezeT>0)freezeT-=dt;if(slowT>0)slowT-=dt;if(shakeAmp>0)shakeAmp=Math.max(0,shakeAmp-dt*1.5);if(fovPunch>0)fovPunch=Math.max(0,fovPunch-dt*3.0);tickMeter(now);
     frameAcc+=dt;frameN++;
     if(!qualityChecked&&frameN>240){qualityChecked=true;if(frameAcc/frameN>0.045){renderer.shadowMap.enabled=false;if(scene.userData.sun)scene.userData.sun.castShadow=false;}} // 低速端末は影を切って軽く
-    if(ballMesh){if(ballMesh.visible){trailPts.push(ballMesh.position.clone());if(trailPts.length>26)trailPts.shift();ballTrailLine.geometry.setFromPoints(trailPts);}
-      else if(trailPts.length){trailPts=[];ballTrailLine.geometry.setFromPoints(trailPts);}}
+    if(ballMesh){if(ballMesh.visible){trailPts.push(ballMesh.position.clone());if(trailPts.length>26)trailPts.shift();updateTrail();}
+      else if(trailPts.length){trailPts=[];updateTrail();}}
     const t=now*0.001;
     for(let i=0;i<allPlayers3D.length;i++){const g=allPlayers3D[i];if(!g.parent)continue;const u=g.userData;
       if(u.running&&u.legL){const s=Math.sin(t*13+i*2.1);u.legL.rotation.x=s*0.55;u.legR.rotation.x=-s*0.55;u.armL.rotation.x=-s*0.3;u.armR.rotation.x=s*0.3;}
@@ -1241,24 +1247,36 @@ function showTelop(html,ms){
   t.style.animation='none';void t.offsetWidth;t.style.animation='';
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),ms||1500);
 }
-function sparkBurst(n,spread){
-  if(!scene)return;const parts=[];n=n||10;spread=spread||1;
-  for(let i=0;i<n;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(0.09,0.09),new THREE.MeshBasicMaterial({color:0xffe97a,transparent:true,side:THREE.DoubleSide}));
-    m.position.set(0.4,1.1,16.2);scene.add(m);parts.push({m,vx:rf(-1.6,1.6)*spread,vy:rf(0.4,2.2)*spread,vz:rf(-1.6,0.4)});}
-  addTween(0.38,p=>{parts.forEach(o=>{o.m.position.x+=o.vx*0.03;o.m.position.y+=o.vy*0.03;o.m.position.z+=o.vz*0.03;o.m.material.opacity=1-p;});},
-   ()=>parts.forEach(o=>scene.remove(o.m)));
+function sparkBurst(n,spread){ // 火花：光る粒が重力で落ちながら消える
+  if(!scene)return;n=n||14;spread=spread||1;const tex=makeGlowTex(),parts=[],cols=[0xffffff,0xffe97a,0xffb03a];
+  for(let i=0;i<n;i++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:cols[i%3],transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+    sp.position.set(0.4,1.1,16.2);const s=rf(0.22,0.55);sp.scale.set(s,s,1);scene.add(sp);
+    parts.push({sp,vx:rf(-2.6,2.6)*spread,vy:rf(0.6,3.4)*spread,vz:rf(-2.4,0.6),g:rf(3.5,5.5)});}
+  addTween(0.5,p=>{parts.forEach(o=>{o.vy-=o.g*0.016;o.sp.position.x+=o.vx*0.016;o.sp.position.y+=o.vy*0.016;o.sp.position.z+=o.vz*0.016;o.sp.material.opacity=1-p*p;});},
+   ()=>parts.forEach(o=>scene.remove(o.sp)));
 }
-function impactRing(big){
+function impactRing(big){ // 衝撃：閃光＋二重リング（内＝速い白、外＝金）
+  if(!scene)return;const tex=makeGlowTex();
+  const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:big?0xffd94d:0xffffff,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  fl.position.set(0.4,1.12,16.15);fl.scale.set(0.6,0.6,1);scene.add(fl);
+  addTween(0.16,p=>{const s=0.6+p*(big?2.8:1.8);fl.scale.set(s,s,1);fl.material.opacity=0.95*(1-p);},()=>scene.remove(fl));
+  [[0xffffff,0.28,big?2.8:2.0,0.95],[big?0xffd94d:0x9fd8ff,0.5,big?4.6:3.2,0.7]].forEach(cfg=>{
+    const m=new THREE.Mesh(new THREE.RingGeometry(0.30,0.40,32),new THREE.MeshBasicMaterial({color:cfg[0],transparent:true,opacity:cfg[3],side:THREE.DoubleSide,depthWrite:false}));
+    m.position.set(0.4,1.12,16.12);scene.add(m);
+    addTween(cfg[1],p=>{const sc=0.4+p*cfg[2];m.scale.set(sc,sc,1);m.material.opacity=cfg[3]*(1-p);},()=>scene.remove(m));});
+}
+function swingArc(){ // バットの風切り弧
   if(!scene)return;
-  const m=new THREE.Mesh(new THREE.RingGeometry(0.32,0.42,28),new THREE.MeshBasicMaterial({color:big?0xffd94d:0xffffff,transparent:true,opacity:0.9,side:THREE.DoubleSide,depthWrite:false}));
-  m.position.set(0.4,1.15,16.1);scene.add(m);
-  addTween(0.32,p=>{const sc=0.4+p*(big?3.4:2.1);m.scale.set(sc,sc,1);m.material.opacity=0.9*(1-p);},()=>scene.remove(m));
+  const m=new THREE.Mesh(new THREE.RingGeometry(0.55,1.1,20,1,-0.4,2.3),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false}));
+  m.position.set(0.4,1.15,16.3);m.rotation.x=0.4;scene.add(m);
+  addTween(0.16,p=>{m.rotation.z=-p*1.6;m.material.opacity=0.5*(1-p);const s=1+p*0.5;m.scale.set(s,s,1);},()=>scene.remove(m));
 }
 function impactFX(strength,perfect){
   freezeT=perfect?0.17:0.05+strength*0.07;               // ヒットストップ（当たった瞬間に時が止まる）
   shakeAmp=Math.max(shakeAmp,0.05+strength*0.15+(perfect?0.09:0)); // 画面シェイク
+  fovPunch=Math.min(1,0.3+strength*0.7+(perfect?0.15:0)); // カメラが一瞬グッと寄る
   impactRing(perfect||strength>=0.9);
-  if(perfect)sparkBurst(22,1.7);
+  sparkBurst(perfect?30:Math.round(8+strength*14),perfect?1.9:1.1+strength*0.5);
 }
 /* --- PayPayドーム名物：ラッキー7の風船・勝利の花火 --- */
 function releaseBalloons(){
@@ -1366,6 +1384,7 @@ function onSwing(){
   // バットが当たる処理へ（投球アニメを止める代わりにボールを引き継ぐ）
   M.ballLive=false;tweens.length=0;
   if(P3.batter){const b=P3.batter;addTween(0.07,p=>{b.rotation.y=Math.PI+p*0.35;},()=>{addTween(0.09,p=>{b.rotation.y=Math.PI+0.35-p*2.65;},()=>{addTween(0.24,p=>{b.rotation.y=Math.PI-2.3+p*2.3;});});});}
+  swingArc();
   resolveContact(dz);
 }
 function onTake(){
@@ -1427,6 +1446,7 @@ function resolveContact(dz){
   const finishHit=()=>{
      ballMesh.visible=false;setCam('bat');slowmo=1;
      if(outcome==='HR'){banner('ホームラン！！');sfx('hr');vib('0,70,50,150');exciteCrowd(1);S.fans+=15;
+       particleBurst(lx,4,lz,0xffd94d);setTimeout(()=>particleBurst(lx+rf(-3,3),6,lz+rf(-2,2),0xff9ff3),260);setTimeout(()=>particleBurst(lx+rf(-4,4),5,lz,0x6bc5ff),520);
        showTelop('<div><div class="tt-name">💥 ホームラン！</div><div class="tt-sub">'+bt.name+' — '+t.type.label+' '+t.speed+'km/h を完璧に捉えた！</div></div>',2300);
        drawBoard('ホームラン！',bt.name);setTimeout(()=>drawBoard('⚾⚾⚾',bt.name),450);setTimeout(()=>drawBoard('ホームラン！',bt.name+' おめでとう！'),900);}
      else if(outcome==='OUT'){sfx('out');}
