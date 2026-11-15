@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ドリームペナント3D 〜一生野球〜</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="flash"></div>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+
+<!-- ===== 上部HUD（常時） ===== -->
+<header id="hud">
+  <div class="hud-left">
+    <div id="hud-team">⚾ ドリームスターズ</div>
+    <div id="hud-season">1年目 第1節</div>
+  </div>
+  <div class="hud-right">
+    <div class="hud-chip">🪙 <span id="hud-coins">0</span></div>
+    <div class="hud-chip">💪 <span id="hud-tp">0</span> TP</div>
+    <div class="hud-chip">👥 <span id="hud-fans">0</span>人</div>
+    <button id="btn-help" class="hud-btn">？</button>
+    <button id="btn-mute" class="hud-btn">🔊</button>
+    <button id="btn-save" class="hud-btn">💾</button>
+  </div>
+</header>
+
+<!-- ===== ホーム（球場を眺めながら選ぶ） ===== -->
+<section id="screen-home" class="screen">
+  <div id="home-title">
+    <div id="home-title-main"><img src="icon.png" id="title-icon" alt="">ドリームペナント<span class="t3d">3D</span></div>
+    <div id="home-title-sub">〜 一生遊べる、俺たちの野球 〜</div>
+    <div id="home-record-line"></div>
+  </div>
+  <div id="idle-box">
+    <div>🏟️ 球場の観客収入（放置でも貯まる）</div>
+    <div id="idle-amount">0 コイン</div>
+    <button id="btn-idle" class="btn gold">受け取る</button>
+  </div>
+  <nav id="home-menu">
+    <button class="menu-btn primary" id="btn-play">⚾ 試合をする<span class="menu-sub" id="play-sub">次の試合へ</span></button>
+    <button class="menu-btn" id="btn-season">🏆 シーズン<span class="menu-sub">順位表・日程</span></button>
+    <button class="menu-btn" id="btn-roster">👥 選手・育成<span class="menu-sub">特訓とオーダー</span></button>
+    <button class="menu-btn" id="btn-scout">🔍 スカウト<span class="menu-sub">ガチャで新戦力</span></button>
+    <button class="menu-btn" id="btn-stadium">🏟️ 球場<span class="menu-sub">拡張して3Dで育てる</span></button>
+    <button class="menu-btn" id="btn-records">📖 記録・殿堂<span class="menu-sub">実績と球団史</span></button>
+    <button class="menu-btn" id="btn-missions">🎯 ミッション<span class="menu-sub" id="missions-sub">毎日3つ</span></button>
+  </nav>
+  <div id="home-news"></div>
+</section>
+
+<!-- ===== 試合画面 ===== -->
+<section id="screen-game" class="screen hidden">
+  <div id="scoreboard">
+    <div id="sb-teams"></div>
+    <div id="sb-situation">
+      <span id="sb-inning">1回表</span>
+      <span id="sb-outs">●○○ アウト</span>
+      <span id="sb-count">B○○○ S○○</span>
+      <span id="sb-bases">◇ 空</span>
+    </div>
+    <div id="sb-lines"></div>
+  </div>
+  <div id="intro-telop" class="hidden"></div>
+  <input type="file" id="photo-input" accept="image/*" class="hidden">
+  <div id="commentary"></div>
+  <div id="batter-card"></div>
+  <div id="pitch-info"></div>
+  <div id="cursor-zone" class="hidden"><div id="cz-label">ミートカーソル（指で動かす）</div><div id="cursor-ring"></div><div id="cursor-ball" class="hidden"></div></div>
+  <div id="game-controls">
+    <!-- 攻撃時 -->
+    <div id="bat-controls" class="gctrl hidden">
+      <div id="pitch-coming" class="hidden">⚾ 投球中… タイミングよく振れ！</div>
+      <button id="btn-swing" class="btn swing">🏏 スイング！</button>
+      <button id="btn-take" class="btn sub">見送る</button>
+      <button id="btn-bunt" class="btn sub">バント</button>
+      <button id="btn-pinch" class="btn sub">代打</button>
+      <button id="btn-steal" class="btn sub">💨 盗塁</button>
+    </div>
+    <!-- 守備時 -->
+    <div id="pitch-controls" class="gctrl hidden">
+      <div id="pitch-select"></div>
+      <div id="meter-wrap" class="hidden">
+        <div id="meter-bar"><div id="meter-sweet"></div><div id="meter-needle"></div></div>
+        <div class="meter-label">真ん中の金色で止めると完璧な1球！</div>
+      </div>
+      <button id="btn-throw" class="btn swing hidden">🎯 リリース！</button>
+      <button id="btn-relief" class="btn sub">🔄 継投</button>
+    </div>
+    <div id="game-sub-controls">
+      <button id="btn-sim-half" class="btn mini">⏩ この回をシミュ</button>
+      <button id="btn-sim-game" class="btn mini">⏭️ 試合終了までシミュ</button>
+      <button id="btn-speed" class="btn mini">⏩ 1x</button>
+      <button id="btn-quit-game" class="btn mini danger">棄権</button>
+    </div>
+  </div>
+  <div id="result-banner" class="hidden"></div>
+</section>
+
+<!-- ===== 汎用パネル（シーズン/選手/スカウト/球場/記録/ミッション/ヘルプ） ===== -->
+<section id="screen-panel" class="screen hidden">
+  <div id="panel-box">
+    <div id="panel-head">
+      <div id="panel-title">タイトル</div>
+      <button id="btn-panel-close" class="btn mini">✕ 閉じる</button>
+    </div>
+    <div id="panel-body"></div>
+  </div>
+</section>
+
+<!-- ===== 試合結果モーダル ===== -->
+<div id="modal" class="hidden">
+  <div id="modal-box">
+    <div id="modal-title"></div>
+    <div id="modal-body"></div>
+    <button id="btn-modal-ok" class="btn gold big">OK</button>
+  </div>
+</div>
+
+<div id="splash"><img src="icon.png" alt=""><div>ドリームペナント3D</div><div class="splash-sub">DREAM PENNANT 3D</div><div class="splash-bar"><i></i></div></div>
+<div id="toast" class="hidden"></div>
+<div id="big-banner" class="hidden"></div>
+
+<script src="libs/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
