@@ -540,21 +540,27 @@ function makePlayer(color,accent,isBatter,person){
   const ap=appearanceOf(person), skin=parseInt(SKIN_TONES[ap.skin].slice(1),16);
   const g=new THREE.Group();
   // 脚（股関節ピボットで走りアニメ可能に）
-  function leg(side){
-    const piv=new THREE.Group();piv.position.set(0.11*side,0.68,0);g.add(piv);
-    const th=box(0.14,0.62,0.15,0xf4f6f8,0,-0.3,0,piv);
-    box(0.15,0.09,0.26,0x22242a,0,-0.62,0.04,piv); // スパイク
+  function leg(side){ // 2関節の脚：太もも＋膝ピボット＋すね（走ると膝が曲がる）
+    const piv=new THREE.Group();piv.position.set(0.11*side,0.70,0);g.add(piv);
+    box(0.145,0.36,0.155,0xf4f6f8,0,-0.17,0,piv); // 太もも
+    const knee=new THREE.Group();knee.position.set(0,-0.35,0);piv.add(knee);
+    box(0.125,0.32,0.13,0xf4f6f8,0,-0.15,0,knee); // すね
+    box(0.15,0.055,0.165,accent,0,-0.05,0,knee); // ストッキングのライン
+    box(0.135,0.07,0.27,0x22242a,0,-0.315,0.045,knee); // スパイク
+    piv.userData.shin=knee;
     return piv;
   }
   const legL=leg(-1),legR=leg(1);
   // 胴（ジャージ：背番号テクスチャ）
   const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.24,0.64,14),new THREE.MeshLambertMaterial({map:jerseyTexture(color,ap.number)}));
   torso.position.set(0,1.0,0);g.add(torso);
-  box(0.34,0.1,0.2,0xf4f6f8,0,0.68,0,g); // 腰
+  box(0.34,0.1,0.2,0xf4f6f8,0,0.70,0,g); // 腰
+  box(0.35,0.035,0.21,0x2a2d33,0,0.755,0,g); // ベルト
   // 腕（肩ピボット）
   function arm(side,isBatArm){
     const piv=new THREE.Group();piv.position.set(0.29*side,1.28,0);g.add(piv);
     box(0.12,0.3,0.12,color,0,-0.13,0,piv); // 袖
+    box(0.125,0.05,0.125,accent,0,-0.275,0,piv); // 袖口のライン
     box(0.10,0.3,0.10,skin,0,-0.4,0,piv);   // 前腕・肌
     const hand=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,8),mat(skin));hand.position.set(0,-0.56,0);piv.add(hand);
     piv.rotation.z=side*0.16;
@@ -589,7 +595,7 @@ function makePlayer(color,accent,isBatter,person){
   }
   g.scale.setScalar(1.12);
   g.traverse(o=>{if(o.isMesh&&!(o.material&&o.material.isMeshBasicMaterial))o.castShadow=true;});
-  g.userData.armL=armL;g.userData.armR=armR;g.userData.legL=legL;g.userData.legR=legR;g.userData.head=headG;g.userData.person=person;
+  g.userData.armL=armL;g.userData.armR=armR;g.userData.legL=legL;g.userData.legR=legR;g.userData.shinL=legL.userData.shin;g.userData.shinR=legR.userData.shin;g.userData.head=headG;g.userData.person=person;
   allPlayers3D.push(g);
   return g;
 }
@@ -789,8 +795,12 @@ function initGL(){
       else if(trailPts.length){trailPts=[];updateTrail();}}
     const t=now*0.001;
     for(let i=0;i<allPlayers3D.length;i++){const g=allPlayers3D[i];if(!g.parent)continue;const u=g.userData;
-      if(u.running&&u.legL){const s=Math.sin(t*13+i*2.1);u.legL.rotation.x=s*0.55;u.legR.rotation.x=-s*0.55;u.armL.rotation.x=-s*0.3;u.armR.rotation.x=s*0.3;}
-      else if(u.isFielder&&u.armL){u.armL.rotation.x=Math.sin(t*1.7+i*1.9)*0.06;}}
+      if(u.running&&u.legL){const ph=t*13+i*2.1,s=Math.sin(ph);u.legL.rotation.x=s*0.6;u.legR.rotation.x=-s*0.6;u.armL.rotation.x=-s*0.35;u.armR.rotation.x=s*0.35;
+        if(u.shinL){u.shinL.rotation.x=-Math.max(0,Math.sin(ph-0.8))*0.95;u.shinR.rotation.x=-Math.max(0,-Math.sin(ph-0.8))*0.95;}} // 膝の屈曲
+      else if(u.isFielder&&u.armL){u.armL.rotation.x=Math.sin(t*1.7+i*1.9)*0.06;}
+      if(u.head)u.head.position.y=1.52+Math.sin(t*1.8+i*1.37)*0.011; // 呼吸：頭と体がわずかに上下する
+      if(!u.running&&!u.inMotion)g.position.y=Math.sin(t*1.8+i*1.37)*0.008;}
+    if(crowdMeshes.length&&performance.now()>(window._crowdHold||0)){const ct=now*0.001;for(let ci=0;ci<crowdMeshes.length;ci++){const d=crowdMeshes[ci];d.position.y=d.userData.y0+Math.sin(ct*2.1+ci*0.55)*0.045;}} // 観客のざわめき
     if(P3.batter&&P3.batter.userData.armR&&M&&!M.finished&&!M.ballLive)P3.batter.userData.armR.rotation.z=-0.5+Math.sin(t*3.1)*0.08; // バットの揺れ（構え）
     updateCamera(dt);renderer.render(scene,camera);})(last);
 }
@@ -1233,13 +1243,21 @@ function nextPA(){
 
 /* --- 演出ヘルパー（観客・歓声・追球・テロップ） --- */
 function umpPunch(){if(P3.ump&&P3.ump.userData.armR){const a=P3.ump.userData.armR;addTween(0.3,pr=>{a.rotation.x=-2.5*Math.sin(pr*Math.PI);},()=>{a.rotation.x=0;});}}
-function crowdWave(){if(!crowdMeshes.length)return;const dots=crowdMeshes.slice();
+function crowdWave(){if(!crowdMeshes.length)return;window._crowdHold=performance.now()+2700;const dots=crowdMeshes.slice();
   addTween(2.6,p=>{dots.forEach((d,i)=>{d.position.y=d.userData.y0+Math.max(0,Math.sin(p*6.28-i*0.12))*0.5;});},()=>dots.forEach(d=>{d.position.y=d.userData.y0;}));}
 function exciteCrowd(power){
-  if(!crowdMeshes.length)return;const dots=crowdMeshes.slice();
+  if(!crowdMeshes.length)return;window._crowdHold=performance.now()+1100;const dots=crowdMeshes.slice();
   addTween(0.95,p=>{const s=Math.sin(p*Math.PI);dots.forEach((d,i)=>{d.position.y=d.userData.y0+s*(0.22+(i%5)*0.1)*power;});},
    ()=>dots.forEach(d=>{d.position.y=d.userData.y0;}));
   swellCrowd(power>=0.8);
+}
+function dustPuff(x,y,z,n,big){ // 土煙：着地・踏み込み・走塁の足元に
+  if(!scene)return;const tex=makeGlowTex(),items=[];n=n||6;
+  for(let i=0;i<n;i++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:0xcbb28a,transparent:true,opacity:0.5,depthWrite:false}));
+    sp.position.set(x+rf(-0.3,0.3),y+rf(0,0.15),z+rf(-0.3,0.3));const s=rf(0.3,0.6)*(big?1.6:1);sp.scale.set(s,s,1);scene.add(sp);
+    items.push({sp,vx:rf(-0.5,0.5),vy:rf(0.4,0.9),vz:rf(-0.5,0.5)});}
+  addTween(0.55,p=>{items.forEach(o=>{o.sp.position.x+=o.vx*0.02;o.sp.position.y+=o.vy*0.02;o.sp.position.z+=o.vz*0.02;const s=o.sp.scale.x+0.014;o.sp.scale.set(s,s,1);o.sp.material.opacity=0.5*(1-p);});},
+   ()=>items.forEach(o=>scene.remove(o.sp)));
 }
 let crowdNodes=null;
 function startCrowd(){
@@ -1262,8 +1280,8 @@ function chaseBall(lx,lz,dur,isOut){
   P3.fielders.forEach(f=>{if(f===P3.catcher)return;const dx=f.position.x-lx,dz=f.position.z-lz,d=dx*dx+dz*dz;if(d<bd){bd=d;best=f;}});
   if(!best)return;
   const sx=best.position.x,sz=best.position.z,tx=isOut?lx:lx+rf(-2.5,2.5),tz=isOut?lz:lz+rf(-2,2);
-  best.userData.running=true;
-  addTween(dur*0.96,p=>{best.position.x=sx+(tx-sx)*p;best.position.z=sz+(tz-sz)*p;},()=>{best.userData.running=false;});
+  best.userData.running=true;let puffAcc=0;
+  addTween(dur*0.96,p=>{best.position.x=sx+(tx-sx)*p;best.position.z=sz+(tz-sz)*p;puffAcc+=0.016;if(puffAcc>0.17){puffAcc=0;dustPuff(best.position.x,0.12,best.position.z,2);}},()=>{best.userData.running=false;});
 }
 function showTelop(html,ms){
   const t=$('intro-telop');t.innerHTML=html;t.classList.remove('hidden');
@@ -1333,49 +1351,76 @@ function aimBonus(t){
 }
 /* --- 攻撃：投球とスイング --- */
 const PITCH_TYPES=[
- {k:'fast',label:'ストレート',spd:[138,158],brk:0},
- {k:'slider',label:'スライダー',spd:[122,138],brk:0.9},
- {k:'curve',label:'カーブ',spd:[105,122],brk:-1.1},
- {k:'fork',label:'フォーク',spd:[120,134],brk:0,drop:0.72},
- {k:'shoot',label:'シュート',spd:[128,142],brk:-0.7},
+ {k:'fast',label:'ストレート',spd:[138,158],brk:0,spin:11,late:1.7},
+ {k:'slider',label:'スライダー',spd:[122,138],brk:0.9,spin:7,late:2.3},
+ {k:'curve',label:'カーブ',spd:[105,122],brk:-1.1,spin:-8,late:1.5},
+ {k:'fork',label:'フォーク',spd:[120,134],brk:0,drop:0.72,spin:4,late:1.7},
+ {k:'shoot',label:'シュート',spd:[128,142],brk:-0.7,spin:9,late:2.0},
+ {k:'cutter',label:'カットボール',spd:[128,142],brk:0.45,spin:10,late:2.6},
+ {k:'sinker',label:'シンカー',spd:[126,140],brk:-0.55,drop:0.38,spin:8,late:2.2},
+ {k:'split',label:'スプリット',spd:[124,138],brk:0.08,drop:0.88,spin:3,late:1.9},
+ {k:'changeup',label:'チェンジアップ',spd:[106,120],brk:-0.35,drop:0.3,spin:6,late:1.6},
+ {k:'knuckle',label:'ナックル',spd:[95,112],brk:0.15,spin:0.6,late:1.2,flutter:1},
 ];
+const PITCH_COLORS={fast:0xffffff,slider:0x54e0ff,curve:0xffe97a,fork:0xff7ad9,shoot:0x9dff8a,cutter:0xff8c42,sinker:0x2ee6a8,split:0xb388ff,changeup:0x64b5f6,knuckle:0xe8e4da};
+function pitchMotion(P,form,stretch,onRelease){
+  // 本格投球モーション：構え→脚上げ→踏み込み→腕を振り抜いてリリース→フォロースルー
+  if(!P||!P.userData.armR){if(onRelease)onRelease();return;}
+  const armR=P.userData.armR,armL=P.userData.armL,legL=P.userData.legL,shinL=P.userData.shinL;
+  const peak=[-2.5,-2.05,-1.35][form||0]; // オーバースロー/スリークォーター/サイド
+  const lift=stretch?0.35:1.0;           // 走者がいればセットポジション（小さく速く）
+  const bRX=P.rotation.x,bRY=P.rotation.y,bRZ=P.rotation.z,bY=P.position.y,bZ=P.position.z;
+  P.userData.inMotion=true;
+  setTimeout(()=>{if(P.userData.inMotion){armR.rotation.x=0;if(armL)armL.rotation.x=0;if(legL)legL.rotation.x=0;if(shinL)shinL.rotation.x=0;P.rotation.set(bRX,bRY,bRZ);P.position.y=bY;P.position.z=bZ;P.userData.inMotion=false;}},1700); // 打者のスイングでtweenが消えた場合の姿勢復旧
+  if(form===2)P.rotation.z=bRZ+0.18;
+  addTween(0.42*lift+0.12,p=>{const s=Math.sin(p*Math.PI*0.5); // 1) 脚上げと体のひねり
+    if(legL)legL.rotation.x=-1.05*lift*s;if(shinL)shinL.rotation.x=1.15*lift*s;
+    armR.rotation.x=peak*0.55*s;if(armL)armL.rotation.x=-0.7*s;
+    P.rotation.y=bRY+0.38*s;P.position.y=bY-0.05*s;},
+  ()=>{addTween(0.20,p=>{ // 2) 踏み込み＋腕をトップへ
+     if(legL)legL.rotation.x=-1.05*lift*(1-p)-0.15*p;if(shinL)shinL.rotation.x=1.15*lift*(1-p);
+     armR.rotation.x=peak*(0.55+0.45*p);P.rotation.y=bRY+0.38*(1-p*1.6);P.position.z=bZ+0.55*p;P.position.y=bY-0.05+0.05*p;},
+   ()=>{dustPuff(P.position.x,0.1,bZ+1.0,4); // 踏み込みの土煙
+    addTween(0.09,p=>{armR.rotation.x=peak+(0.95-peak)*p;P.rotation.x=bRX+0.22*p;}, // 3) 振り抜き
+    ()=>{if(onRelease)onRelease();
+     addTween(0.38,p=>{armR.rotation.x=0.95-1.15*p;if(armL)armL.rotation.x=-0.7+0.55*p;P.rotation.x=bRX+0.22*(1-p*0.6);P.position.z=bZ+0.55*(1-p);}, // 4) フォロースルー
+     ()=>{armR.rotation.x=0;if(armL)armL.rotation.x=0;if(legL)legL.rotation.x=0;if(shinL)shinL.rotation.x=0;P.rotation.set(bRX,bRY,bRZ);P.position.y=bY;P.position.z=bZ;P.userData.inMotion=false;});
+    });});});
+}
 function startPitch(){
   if(!M||M.finished||M.half!=='bottom')return;
   M.busy=true;M.swungEarly=false;
   const pp=M.opp.pitcher;
-  const type=pick(PITCH_TYPES);
+  const type=(Math.random()<0.055)?PITCH_TYPES[9]:pick(PITCH_TYPES.slice(0,9)); // ナックルはたまに来る魔球
   const speed=Math.round(clamp(rf(type.spd[0],type.spd[1])+(pp.vel-60)*0.25,95,168));
   const inZone=Math.random()<0.68;
   const tx=inZone?rf(-0.5,0.5):rf(0.6,1.1)*(Math.random()<0.5?-1:1);
   const ty=inZone?rf(0.75,1.65):rf(0.3,2.1);
   const dur=clamp(1.55-(speed-100)*0.0055,0.95,1.5);
-  M.pitch={type,speed,tx,ty,dur};M.oppPitches=(M.oppPitches||0)+1;
+  M.pitch={type,speed,tx,ty,dur};M.oppPitches=(M.oppPitches||0)+1;M.flutterSeed=rf(0,6.28);
   if(P3.zoneFrame)P3.zoneFrame.visible=true;
   if(P3.targetRing){P3.targetRing.position.set(tx,ty,16.3);P3.targetRing.visible=true;}
-  if(ballTrailLine)ballTrailLine.material.color.set({fast:0xffffff,slider:0x54e0ff,curve:0xffe97a,fork:0xff7ad9,shoot:0x9dff8a}[type.k]||0xffffff);
+  if(ballTrailLine)ballTrailLine.material.color.set(PITCH_COLORS[type.k]||0xffffff);
   // プロスピA式ミートカーソル：ボールの到達点に指で合わせる
   cursorPos={x:0.5,y:0.5};cursorMoved=false;
   $('cursor-ring').style.left='50%';$('cursor-ring').style.top='50%';
   $('cursor-zone').classList.remove('hidden');$('cursor-ball').classList.remove('hidden');
   $('pitch-info').innerHTML='⚾ '+M.opp.pitcher.name+'（球数'+M.oppPitches+'）<br>球速表示は打った後！'+(M.oppPitches>80?'<br>🥵 相手投手は疲れている！':'');
   $('pitch-coming').classList.remove('hidden');
-  // ワインドアップ（投手ごとにフォームが違う：オーバー/スリークォーター/サイド）
-  if(P3.pitcher&&P3.pitcher.userData.armR){const arm=P3.pitcher.userData.armR;const form=nameHash(pp.name)%3,peak=[-2.35,-1.95,-1.3][form];
-    if(form===2)P3.pitcher.rotation.z=0.2;
-    addTween(0.45,p=>{arm.rotation.x=peak*Math.sin(p*Math.PI*0.6);P3.pitcher.rotation.y=Math.sin(p*Math.PI)*0.3;},()=>{addTween(0.12,q=>{arm.rotation.x=peak+(0.8-peak)*q;},()=>{arm.rotation.x=0.4;setTimeout(()=>{if(P3.pitcher){P3.pitcher.userData.armR.rotation.x=0;P3.pitcher.rotation.z=0;}},350);});});}
+  // 本格投球モーション（フォームは投手ごとに3種、走者がいればセットポジション）
   const tk=M.pitchToken||0;
-  setTimeout(()=>{
+  pitchMotion(P3.pitcher,nameHash(pp.name)%3,M.bases.some(b=>b),()=>{
     if(!M||M.finished||(M.pitchToken||0)!==tk)return;
     ballMesh.visible=true;M.ballLive=true;M.ballP=0;
     $('btn-swing').disabled=false;$('btn-take').disabled=false;$('btn-bunt').disabled=false;
     addTween(dur,p=>{
       M.ballP=p;
-      const z=0.4+17*p, x=Math.sin(Math.pow(p,1.7)*Math.PI)*type.brk*0.85 + tx*p; // 変化球は後半に遅れて曲がる
+      const z=0.4+17*p, x=Math.sin(Math.pow(p,type.late||1.7)*Math.PI)*type.brk*0.85 + tx*p + (type.flutter?Math.sin(p*23+M.flutterSeed)*0.09*p:0); // 変化は球種ごとに遅れて鋭く、ナックルは揺れる
       let y=1.35+(ty-1.35)*p; if(type.drop)y-=Math.sin(Math.max(0,p-0.55)*Math.PI)*type.drop;
-      ballMesh.position.set(x,y,z);ballMesh.rotation.x=p*11;ballMesh.rotation.z=type.brk*2*p;
+      ballMesh.position.set(x,y,z);ballMesh.rotation.x=p*(type.spin||10);ballMesh.rotation.z=type.brk*2*p;
       const bd=$('cursor-ball');bd.style.left=clamp(50+x*34,3,97)+'%';bd.style.top=clamp((1-(y-0.3)/1.8)*100,3,97)+'%';
     },()=>{ ballMesh.visible=false;M.ballLive=false;$('cursor-zone').classList.add('hidden');if(P3.zoneFrame)P3.zoneFrame.visible=false;if(P3.targetRing)P3.targetRing.visible=false;calledPitch(); });
-  },480);
+  });
 }
 function calledPitch(){
   if(!M||M.finished)return;
@@ -1467,7 +1512,7 @@ function resolveContact(dz){
   if(M.half==='bottom'&&M.inning>=M.maxInn&&M.score.me===M.score.cpu)slowmo=0.5; // サヨナラの場面はスローモーション
   setCam('follow');ballMesh.visible=true;
   const finishHit=()=>{
-     ballMesh.visible=false;setCam('bat');slowmo=1;
+     ballMesh.visible=false;setCam('bat');slowmo=1;dustPuff(lx,0.15,lz,outcome==='OUT'?8:5,outcome!=='OUT');
      if(outcome==='HR'){banner('ホームラン！！');sfx('hr');vib('0,70,50,150');exciteCrowd(1);S.fans+=15;
        particleBurst(lx,4,lz,0xffd94d);setTimeout(()=>particleBurst(lx+rf(-3,3),6,lz+rf(-2,2),0xff9ff3),260);setTimeout(()=>particleBurst(lx+rf(-4,4),5,lz,0x6bc5ff),520);
        showTelop('<div><div class="tt-name">💥 ホームラン！</div><div class="tt-sub">'+bt.name+' — '+t.type.label+' '+t.speed+'km/h を完璧に捉えた！</div></div>',2300);
@@ -1556,9 +1601,14 @@ function tickMeter(now){
 }
 function myPitches(){
   const p=M.starter;const list=[{k:'fast',label:'ストレート '+Math.round(118+p.vel*0.42)+'km'}];
+  if(p.brk>=34)list.push({k:'changeup',label:'チェンジアップ'});
   if(p.brk>=40)list.push({k:'curve',label:'カーブ'});
+  if(p.brk>=46)list.push({k:'cutter',label:'カットボール'});
   if(p.brk>=52)list.push({k:'slider',label:'スライダー'});
+  if(p.brk>=58)list.push({k:'sinker',label:'シンカー'});
   if(p.brk>=64)list.push({k:'fork',label:'フォーク'});
+  if(p.brk>=70)list.push({k:'split',label:'スプリット'});
+  if(p.brk>=78)list.push({k:'knuckle',label:'ナックル'});
   if(p.vel>=68)list.push({k:'shoot',label:'シュート'});
   if(p.skill==='変化球の鬼'&&!list.find(x=>x.k==='fork'))list.push({k:'fork',label:'フォーク(特技)'});
   return list;
@@ -1583,12 +1633,19 @@ function onThrow(){
   const p=M.starter;
   const tx=quality==='bad'?rf(-1,1):rf(-0.45,0.45), ty=quality==='bad'?rf(0.4,2):rf(0.75,1.65);
   M._lastZone={tx,ty};
-  if(P3.pitcher&&P3.pitcher.userData.armR){const arm=P3.pitcher.userData.armR,peak=[-2.35,-1.95,-1.3][nameHash(p.name)%3];
-    addTween(0.4,pr=>{arm.rotation.x=peak*Math.sin(pr*Math.PI);},()=>{arm.rotation.x=0;});}
-  ballMesh.visible=true;setCam('pitch');
-  addTween(0.55,pr=>{ballMesh.position.set(tx*pr,1.35+(ty-1.35)*pr,0.4+16.6*pr);ballMesh.rotation.x=pr*10;},()=>{
-    ballMesh.visible=false;$('btn-throw').disabled=false;
-    resolveCpuPitch(quality);
+  const pt=PITCH_TYPES.find(x=>x.k===selPitch)||PITCH_TYPES[0];
+  setCam('pitch');
+  pitchMotion(P3.pitcher,nameHash(p.name)%3,M.bases.some(b=>b),()=>{
+    if(!M||M.finished)return;
+    ballMesh.visible=true;
+    addTween(0.55,pr=>{
+      const bx=Math.sin(Math.pow(pr,pt.late||1.7)*Math.PI)*(pt.brk||0)*0.85+tx*pr+(pt.flutter?Math.sin(pr*23+1.7)*0.09*pr:0);
+      let by=1.35+(ty-1.35)*pr; if(pt.drop)by-=Math.sin(Math.max(0,pr-0.55)*Math.PI)*pt.drop;
+      ballMesh.position.set(bx,by,0.4+16.6*pr);ballMesh.rotation.x=pr*(pt.spin||10);ballMesh.rotation.z=(pt.brk||0)*2*pr;
+    },()=>{
+      ballMesh.visible=false;$('btn-throw').disabled=false;
+      resolveCpuPitch(quality);
+    });
   });
 }
 function resolveCpuPitch(quality){
@@ -1597,6 +1654,7 @@ function resolveCpuPitch(quality){
   const diff=(overall(cb)-overall(p))*0.004;
   M.myPitches++;
   let contactP={perfect:0.22,good:0.31,ok:0.39,bad:0.49}[quality]+diff+((M.myPitches>85)?0.05:0)-((p.form||0)*0.006); // 球数疲労と調子
+  if(selPitch==='knuckle'||selPitch==='split')contactP-=0.04;else if(selPitch==='changeup'||selPitch==='sinker')contactP-=0.03;else if(selPitch==='fast')contactP+=0.01; // 球種の打ちにくさ
   let strikeP={perfect:0.47,good:0.36,ok:0.28,bad:0.18}[quality]-diff*0.5;
   const r=Math.random();
   if(r<contactP){
