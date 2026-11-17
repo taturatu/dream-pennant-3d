@@ -360,6 +360,10 @@ function load(){
     if(!Array.isArray(S.standings)||S.standings.length!==6)S.standings=freshStandings();
     if(!S.career)S.career={wins:0,losses:0,draws:0,titles:0,japan:0,seasons:0,hits:0,hr:0,ks:0,games:0};
     if(S.coins==null)S.coins=600;if(S.tp==null)S.tp=20;if(S.fans==null)S.fans=1500;
+    // 数値フィールドの異常値（文字列/NaN/負数/球場Lv範囲外）も修復する（壊れたセーブでHUD表示や球場名が壊れるのを防ぐ）
+    ['coins','tp','fans'].forEach(k=>{if(!(S[k]>=0)||!isFinite(S[k]))S[k]=k==='fans'?1500:k==='tp'?20:600;});
+    if(!(S.gameNo>=1)||!isFinite(S.gameNo))S.gameNo=1;if(!(S.year>=1)||!isFinite(S.year))S.year=1;
+    S.stadiumLv=clamp(Math.round(S.stadiumLv)||1,1,10);
     if(!S.stadiumLv)S.stadiumLv=1;if(!S.phase)S.phase='season';if(!S.gameNo)S.gameNo=1;if(!S.year)S.year=1;
     if(!Array.isArray(S.news))S.news=['球団創設！ ドリームスターズの長い物語が始まる。'];
     if(!Array.isArray(S.hof))S.hof=[];if(!Array.isArray(S.ach))S.ach=[];if(!Array.isArray(S.champYear))S.champYear=[];
@@ -965,7 +969,7 @@ function onPhotoFile(ev){
 }
 function renderScout(resultHtml){
   openPanel('🔍 スカウト（1回 300コイン）',
-   '<p>新しい選手を発掘する。確率は N 45% / R 30% / SR 17% / SSR 6.5% / <span class="rarity-LEGEND">LEGEND 1.5%</span>。<br>選手が16人を超えると、総合の低い順に控えへ（重複感覚でTP+5が入る仕組みもあり）。<br>📷 選手カードの「写真を設定」から、自分のスマホにある実写真をその選手の顔写真にできます（写真は端末の中だけに保存され、外に送られません）。</p>'+
+   '<p>新しい選手を発掘する。確率は N 45% / R 30% / SR 17% / SSR 6.5% / <span class="rarity-LEGEND">LEGEND 1.5%</span>。<br>登録枠は打者16人・投手8人まで。枠がいっぱいの選手は加入せず、代わりにTP+5が入る。<br>📷 選手カードの「写真を設定」から、自分のスマホにある実写真をその選手の顔写真にできます（写真は端末の中だけに保存され、外に送られません）。</p>'+
    '<div class="flexrow"><button class="btn gold big" onclick="doScout()">🔍 スカウトする（300）</button><button class="btn gold big" onclick="doScout10()">🔍 10連（2700・1回分お得）</button><span>所持コイン: '+fmt(S.coins)+'</span></div><p class="small">🎰 天井まであと '+(30-(S.scoutPity||0))+' 回（30回でSSR以上確定・10連でもカウント）</p>'+
    '<div class="card" style="margin-top:10px"><b>🌟 リアル選手スカウト（800コイン）</b><br><span class="small">NPB12球団＋MLBの実在選手 '+REAL_PLAYERS.length+'名からランダムで1名が必ず加入！（未加入の選手のみ）大谷翔平・山本由伸・ジャッジ・村上宗隆…全員実名・実能力値。</span><br><button class="btn gold" onclick="doRealScout()">🌟 リアル選手を獲得する（800）</button></div>'+(resultHtml||''));
 }
@@ -1002,7 +1006,7 @@ function doScout10(){
   if(cnt.SSR||cnt.LEGEND){flash();banner('10連で '+(cnt.LEGEND?'LEGEND ':'')+(cnt.SSR?'SSR ':'')+'出現！');vib('0,80,60,160');sfx('hr');}
   S.news.unshift('スカウト10連：'+['LEGEND','SSR','SR','R','N'].filter(k=>cnt[k]).map(k=>k+'×'+cnt[k]).join(' '));save();refreshHUD();
   renderScout('<div class="gacha-result">✨ 10連結果 ✨</div><div class="card" style="text-align:center"><b>'+cntTxt+'</b>'+(skipped?'<br><span class="small">枠満杯で見送り '+skipped+'名分は TP+'+(skipped*5)+' に変換</span>':'')+'</div>'+
-   res.slice().sort((a,b)=>overall(b.p)-overall(a.p)).map(r=>playerCard(r.p)).join(''));
+   res.slice().sort((a,b)=>overall(b.p)-overall(a.p)).map(r=>playerCard(r.p)+(r.joined?'':'<p class="small" style="margin:-4px 0 8px">↪ 枠満杯で見送り（TP+5に変換済み）</p>')).join(''));
 }
 function doRealScout(){
   if(S.coins<800){toast('コインが足りない！（800必要）');return;}
@@ -1035,8 +1039,9 @@ function renderRecords(){
   // 今季チーム内ランキング（打率は30打席以上が対象）
   const bs=S.players.filter(p=>p.kind==='B'), ps=S.players.filter(p=>p.kind==='P');
   const top=(arr,fn,fmtFn)=>arr.slice().sort((a,b)=>fn(b)-fn(a)).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> <span class="small">'+fmtFn(p)+'</span></div>').join('')||'<p class="small">まだ記録なし</p>';
+  const abMin=[30,10,1].find(t=>bs.some(p=>p.ss.ab>=t))||30; // 打率ランキングの規定打席：シーズン序盤は30打席到達者がいないため段階的に下げる
   const leaders='<h3>📊 今季チーム内ランキング</h3>'+
-   '<p class="small" style="margin-top:6px">打率（30打席以上）</p>'+top(bs.filter(p=>p.ss.ab>=30),p=>p.ss.ab?p.ss.h/p.ss.ab:0,p=>avgText(p)+'（'+p.ss.h+'安打）')+
+   '<p class="small" style="margin-top:6px">打率（'+abMin+'打席以上）</p>'+top(bs.filter(p=>p.ss.ab>=abMin),p=>p.ss.ab?p.ss.h/p.ss.ab:0,p=>avgText(p)+'（'+p.ss.h+'安打）')+
    '<p class="small" style="margin-top:6px">本塁打</p>'+top(bs.filter(p=>p.ss.hr>0),p=>p.ss.hr,p=>p.ss.hr+'本')+
    '<p class="small" style="margin-top:6px">打点</p>'+top(bs.filter(p=>p.ss.rbi>0),p=>p.ss.rbi,p=>p.ss.rbi+'打点')+
    '<p class="small" style="margin-top:6px">盗塁</p>'+top(bs.filter(p=>(p.ss.sb||0)>0),p=>p.ss.sb||0,p=>(p.ss.sb||0)+'盗塁')+
@@ -1146,7 +1151,7 @@ function beginMatch(inn){
 function say(html){$('commentary').innerHTML=html;}
 function updateSB(){
   if(!M)return;
-  $('sb-teams').innerHTML='<span>'+M.opp.short+' '+M.score.cpu+'</span> － <span class="me">⭐あなた '+M.score.me+'</span> <span class="small">'+M.opp.name+'</span>';
+  $('sb-teams').innerHTML='<span>'+M.opp.short+' '+M.score.cpu+'</span> － <span class="me">⭐あなた '+M.score.me+'</span>';
   $('sb-inning').textContent=M.inning+'回'+(M.half==='top'?'表（守備）':'裏（攻撃）');
   $('sb-outs').textContent='アウト '+'●'.repeat(M.outs)+'○'.repeat(3-M.outs);
   $('sb-count').innerHTML='<span class="cnt-b">B'+'●'.repeat(M.balls)+'○'.repeat(Math.max(0,4-M.balls))+'</span> <span class="cnt-s">S'+'●'.repeat(M.strikes)+'○'.repeat(Math.max(0,3-M.strikes))+'</span> <span class="cnt-o">O'+'●'.repeat(M.outs)+'○'.repeat(Math.max(0,3-M.outs))+'</span>';
@@ -1504,7 +1509,7 @@ function onBunt(){$('cursor-zone').classList.add('hidden');
   M.ballLive=false;tweens.length=0;ballMesh.visible=false;
   $('pitch-coming').classList.add('hidden');
   const bt=curMyBatter();const r=Math.random();
-  if(r<0.18){M.strikes=Math.min(2,M.strikes+1);say('実況：バントはファウル。');afterPitchCount();}
+  if(r<0.18){if(M.strikes>=2){recPA(bt.id,x=>{x.ab++;});M.outs++;say('実況：バントはファウル…2ストライク後のバントファウルは三振！');sfx('out');paEnd();}else{M.strikes++;say('実況：バントはファウル。');afterPitchCount();}}
   else if(r<0.30){say('実況：バントが内野安打に！');applyOutcome('me','1B');paEnd();}
   else{say('実況：きれいな送りバント！');recPA(bt.id,x=>{});applyOutcome('me','SAC');paEnd();}
 }
@@ -1838,7 +1843,7 @@ function finishMatch(){
   let seasonNote='';
   if(M.phase==='season'){
     const me=S.standings[0];
-    if(win){me.w++;S.standings[1+( (S.gameNo-1)%5 )].l++;}else if(draw){me.d++;S.standings[1+((S.gameNo-1)%5)].d++;}else{me.l++;S.standings[1+((S.gameNo-1)%5)].w++;}
+    if(win){me.w++;S.standings[1+((S.gameNo-1)%CPU_TEAMS.length)].l++;}else if(draw){me.d++;S.standings[1+((S.gameNo-1)%CPU_TEAMS.length)].d++;}else{me.l++;S.standings[1+((S.gameNo-1)%CPU_TEAMS.length)].w++;}
     simOtherGames();
     S.gameNo++;
     seasonNote='<br>シーズン成績：'+me.w+'勝'+me.l+'敗'+me.d+'分（現在'+myRank()+'位）';
