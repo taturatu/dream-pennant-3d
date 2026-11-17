@@ -356,6 +356,8 @@ function load(){
     if(!['season','cs','js','draft'].includes(S.phase))S.phase='season';
     if(S.campYear==null)S.campYear=0;if(S.tradeYear==null)S.tradeYear=0;
     if(S.hrRace!=null&&!Array.isArray(S.hrRace))S.hrRace=null;
+    // 開幕前（第1戦・全チーム未勝利）なのに本塁打王レースに本数が入っている旧セーブは0本へ戻す
+    if(Array.isArray(S.hrRace)&&S.gameNo===1&&Array.isArray(S.standings)&&S.standings.every(t=>!(t.w>0)&&!(t.l>0)&&!(t.d>0)))S.hrRace.forEach(r=>{r.hr=0;});
     if(S.missions!=null&&(!S.missions||!Array.isArray(S.missions.list)))S.missions=null;
     if(!Array.isArray(S.standings)||S.standings.length!==6)S.standings=freshStandings();
     if(!S.career)S.career={wins:0,losses:0,draws:0,titles:0,japan:0,seasons:0,hits:0,hr:0,ks:0,games:0};
@@ -893,7 +895,7 @@ function renderSeason(){
     return '<tr class="'+(x.i===0?'me-row':'')+'"><td>'+(r+1)+'位 '+x.t.name+'</td><td>'+x.t.w+'</td><td>'+x.t.l+'</td><td>'+x.t.d+'</td><td>'+x.rate.toFixed(3)+'</td><td>'+gb+'</td></tr>';}).join('');
   openPanel('🏆 シーズン順位表（'+S.year+'年目・全24戦）',
    '<table class="stand"><tr><th>チーム</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>GB</th></tr>'+rows+'</table>'+
-   (()=>{if(!S.hrRace){S.hrRace=REAL_PLAYERS.filter(r=>r.pos!=='投手').sort(()=>Math.random()-0.5).slice(0,5).map(r=>({name:r.name,hr:ri(2,6)}));save();} // 生成したら保存し、開き直すたびに顔ぶれが変わらないようにする
+   (()=>{if(!S.hrRace){S.hrRace=REAL_PLAYERS.filter(r=>r.pos!=='投手').sort(()=>Math.random()-0.5).slice(0,5).map(r=>({name:r.name,hr:0}));save();} // 開幕時は全員0本（試合ごとに finishMatch で増える）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする
      const mine=S.players.filter(pl=>pl.kind==='B').sort((a,b)=>b.ss.hr-a.ss.hr)[0];
      const race=S.hrRace.concat(mine?[{name:mine.name+'（自軍）',hr:mine.ss.hr}]:[]).sort((a,b)=>b.hr-a.hr).slice(0,5);
      return '<h3 style="margin-top:10px">⚾ 本塁打王レース</h3>'+race.map((r,i)=>'<div class="card">'+(i+1)+'位 '+r.name+' — '+r.hr+'本</div>').join('');})()+
@@ -971,7 +973,7 @@ function renderScout(resultHtml){
   openPanel('🔍 スカウト（1回 300コイン）',
    '<p>新しい選手を発掘する。確率は N 45% / R 30% / SR 17% / SSR 6.5% / <span class="rarity-LEGEND">LEGEND 1.5%</span>。<br>登録枠は打者16人・投手8人まで。枠がいっぱいの選手は加入せず、代わりにTP+5が入る。<br>📷 選手カードの「写真を設定」から、自分のスマホにある実写真をその選手の顔写真にできます（写真は端末の中だけに保存され、外に送られません）。</p>'+
    '<div class="flexrow"><button class="btn gold big" onclick="doScout()">🔍 スカウトする（300）</button><button class="btn gold big" onclick="doScout10()">🔍 10連（2700・1回分お得）</button><span>所持コイン: '+fmt(S.coins)+'</span></div><p class="small">🎰 天井まであと '+(30-(S.scoutPity||0))+' 回（30回でSSR以上確定・10連でもカウント）</p>'+
-   '<div class="card" style="margin-top:10px"><b>🌟 リアル選手スカウト（800コイン）</b><br><span class="small">NPB12球団＋MLBの実在選手 '+REAL_PLAYERS.length+'名からランダムで1名が必ず加入！（未加入の選手のみ）大谷翔平・山本由伸・ジャッジ・村上宗隆…全員実名・実能力値。</span><br><button class="btn gold" onclick="doRealScout()">🌟 リアル選手を獲得する（800）</button></div>'+(resultHtml||''));
+   '<div class="card" style="margin-top:10px"><b>🌟 リアル選手スカウト（800コイン）</b><br><span class="small">NPB12球団＋MLBの実在選手 '+REAL_PLAYERS.length+'名からランダムで1名が必ず加入！（未加入の選手のみ・登録枠に空きのある種別から選ばれる）大谷翔平・山本由伸・ジャッジ・村上宗隆…全員実名・実能力値。</span><br><button class="btn gold" onclick="doRealScout()">🌟 リアル選手を獲得する（800）</button></div>'+(resultHtml||''));
 }
 function scoutPull(){
   // 1回分の抽選（天井カウント共有）。戻り値 {p, joined, kind}
@@ -1011,8 +1013,10 @@ function doScout10(){
 function doRealScout(){
   if(S.coins<800){toast('コインが足りない！（800必要）');return;}
   const owned=new Set(S.players.filter(p=>p.real).map(p=>p.name));
-  const pool=REAL_PLAYERS.filter(r=>!(r.name==='オスナ'&&owned.has('オスナ'))&&!owned.has(r.name));
-  if(!pool.length){toast('実在選手は全員加入済み！ すごいコレクションだ');return;}
+  // 登録枠（打者16人・投手8人）を通常スカウトと同じく尊重する：満杯の種別は抽選対象から外す
+  const roomB=S.players.filter(x=>x.kind==='B').length<16, roomP=S.players.filter(x=>x.kind==='P').length<8;
+  const pool=REAL_PLAYERS.filter(r=>!(r.name==='オスナ'&&owned.has('オスナ'))&&!owned.has(r.name)&&(r.pos==='投手'?roomP:roomB));
+  if(!pool.length){toast(owned.size>=REAL_PLAYERS.length?'実在選手は全員加入済み！ すごいコレクションだ':'登録枠がいっぱいで加入できない（打者16人・投手8人まで）。トレードで枠を空けよう');return;}
   S.coins-=800;missionAdd('scout',1);sfx('gacha');flash();
   const r=pick(pool);const p=realToPlayer(r);S.players.push(p);
   banner('🌟 実在選手加入！\n'+p.name);sfx('hr');
@@ -1038,14 +1042,19 @@ function upgradeStadium(){
 function renderRecords(){
   // 今季チーム内ランキング（打率は30打席以上が対象）
   const bs=S.players.filter(p=>p.kind==='B'), ps=S.players.filter(p=>p.kind==='P');
-  const top=(arr,fn,fmtFn)=>arr.slice().sort((a,b)=>fn(b)-fn(a)).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> <span class="small">'+fmtFn(p)+'</span></div>').join('')||'<p class="small">まだ記録なし</p>';
+  const top=(arr,fn,fmtFn)=>arr.slice().sort((a,b)=>fn(b)-fn(a)).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> <span class="small">'+fmtFn(p)+'</span></div>').join('');
   const abMin=[30,10,1].find(t=>bs.some(p=>p.ss.ab>=t))||30; // 打率ランキングの規定打席：シーズン序盤は30打席到達者がいないため段階的に下げる
+  // 記録ゼロの部門は「まだ記録なし」を部門ごとに繰り返さず、末尾に1行へまとめる
+  const cats=[
+   ['打率（'+abMin+'打席以上）',top(bs.filter(p=>p.ss.ab>=abMin),p=>p.ss.ab?p.ss.h/p.ss.ab:0,p=>avgText(p)+'（'+p.ss.h+'安打）')],
+   ['本塁打',top(bs.filter(p=>p.ss.hr>0),p=>p.ss.hr,p=>p.ss.hr+'本')],
+   ['打点',top(bs.filter(p=>p.ss.rbi>0),p=>p.ss.rbi,p=>p.ss.rbi+'打点')],
+   ['盗塁',top(bs.filter(p=>(p.ss.sb||0)>0),p=>p.ss.sb||0,p=>(p.ss.sb||0)+'盗塁')],
+   ['奪三振',top(ps.filter(p=>p.ss.k>0),p=>p.ss.k,p=>p.ss.k+'奪三振 / 防御率相当 '+eraText(p))],
+  ];
   const leaders='<h3>📊 今季チーム内ランキング</h3>'+
-   '<p class="small" style="margin-top:6px">打率（'+abMin+'打席以上）</p>'+top(bs.filter(p=>p.ss.ab>=abMin),p=>p.ss.ab?p.ss.h/p.ss.ab:0,p=>avgText(p)+'（'+p.ss.h+'安打）')+
-   '<p class="small" style="margin-top:6px">本塁打</p>'+top(bs.filter(p=>p.ss.hr>0),p=>p.ss.hr,p=>p.ss.hr+'本')+
-   '<p class="small" style="margin-top:6px">打点</p>'+top(bs.filter(p=>p.ss.rbi>0),p=>p.ss.rbi,p=>p.ss.rbi+'打点')+
-   '<p class="small" style="margin-top:6px">盗塁</p>'+top(bs.filter(p=>(p.ss.sb||0)>0),p=>p.ss.sb||0,p=>(p.ss.sb||0)+'盗塁')+
-   '<p class="small" style="margin-top:6px">奪三振</p>'+top(ps.filter(p=>p.ss.k>0),p=>p.ss.k,p=>p.ss.k+'奪三振 / 防御率相当 '+eraText(p));
+   cats.filter(c=>c[1]).map(c=>'<p class="small" style="margin-top:6px">'+c[0]+'</p>'+c[1]).join('')+
+   (cats.some(c=>!c[1])?'<p class="small" style="margin-top:6px">'+cats.filter(c=>!c[1]).map(c=>c[0]).join('・')+'：まだ記録なし</p>':'');
   const ach=ACHS.map(a=>'<div class="card">'+(S.ach.includes(a.id)?'✅':'🔒')+' <b>'+a.label+'</b> <span class="small">報酬'+a.reward+'コイン</span></div>').join('');
   const hof=S.hof.length? S.hof.map(h=>'<div class="card"><img class="portrait-s" src="'+drawPortrait({name:h.name,team:'スターズ',pos:'',kind:'B',meet:50,pow:50,run:50,def:50,vel:50,ctl:50,brk:50,sta:50})+'">👑 <b>'+h.name+'</b> <span class="small">'+h.year+'年に殿堂入り / '+h.note+'</span></div>').join(''):'<p class="small">まだ殿堂入り選手はいない。長く活躍した選手が引退すると殿堂入りする。</p>';
   openPanel('📖 記録・殿堂','<p>通算：'+S.career.wins+'勝 '+S.career.losses+'敗 '+S.career.draws+'分 / 安打'+S.career.hits+' / 本塁打'+S.career.hr+' / 奪三振'+S.career.ks+'<br>リーグ優勝 '+S.career.titles+'回 / 日本一 '+S.career.japan+'回 / 経過 '+S.year+'年</p>'+leaders+'<h3>🏅 実績</h3>'+ach+'<h3>👑 殿堂入り</h3>'+hof);
@@ -1901,6 +1910,7 @@ function offseasonStart(){
   while(S.players.filter(p=>p.kind==='B').length<10){const r=genPlayer('B',Math.random()<0.3?'R':'N',0);S.players.push(r);notes.push('育成選手 '+r.name+' が入団。');}
   while(S.players.filter(p=>p.kind==='P').length<4){const r=genPlayer('P','N',0);S.players.push(r);notes.push('育成投手 '+r.name+' が入団。');}
   S.rival=pick(['山本由伸','今井達也','戸郷翔征','村上頌樹','宮城大弥','高橋宏斗','伊藤大海']);
+  S.hrRace=null; // 本塁打王レースはシーズンごとに作り直す（前年の本数が翌年の開幕に残らないように）
   const young=S.players.filter(pl=>pl.age<=23&&pl.potential!=='C');
   if(young.length&&Math.random()<0.6){const yp=pick(young);const kk=yp.kind==='P'?pick(['vel','brk']):pick(['meet','pow']);yp[kk]=clamp(yp[kk]+5,20,99);notes.push('🌟 若手覚醒！ '+yp.name+' の'+kk+'が+5');}
   S.career.seasons++;S.year++;S.phase='draft';
@@ -1915,7 +1925,14 @@ function openDraft(){
   $('screen-home').classList.remove('hidden');
 }
 function chooseDraft(i){
-  const p=draftList[i];S.players.push(p);
+  const p=draftList[i];
+  // 登録枠（打者16人・投手8人）をスカウトと同じく尊重する：満杯なら加入せずTP+5に変換
+  if(S.players.filter(x=>x.kind===p.kind).length>=(p.kind==='P'?8:16)){
+    S.tp+=5;S.news.unshift('ドラフト指名の '+p.name+' は登録枠がいっぱいで入団できず、代わりにTP+5。'+S.year+'年目シーズン開幕。');
+    S.standings=freshStandings();S.gameNo=1;S.phase='season';save();closePanel();showHome();refreshHUD();
+    toast('枠がいっぱいで '+p.name+' は入団できず…代わりにTP+5');return;
+  }
+  S.players.push(p);
   S.news.unshift('ドラフトで '+p.name+'（'+p.rarity+'）を指名！ '+S.year+'年目シーズン開幕。');
   S.standings=freshStandings();S.gameNo=1;S.phase='season';sfx('gacha');save();closePanel();showHome();
   toast(p.name+' が入団！ '+S.year+'年目シーズン開幕！');
