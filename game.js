@@ -12,6 +12,7 @@ const rf=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 const fmt=n=>Math.floor(n).toLocaleString('ja-JP');
+const STAT_JP={meet:'ミート',pow:'パワー',run:'走力',def:'守備',vel:'球速',ctl:'制球',brk:'変化',sta:'体力'}; // 能力キーの日本語名（結果表示で英語キーを出さない）
 function todayKey(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
 
 /* ---------- 名前生成（自作リスト） ---------- */
@@ -944,6 +945,7 @@ function refreshHUD(){
   $('home-record-line').textContent='通算 '+S.career.wins+'勝'+S.career.losses+'敗 / リーグ優勝 '+S.career.titles+'回 / 日本一 '+S.career.japan+'回 / 球場Lv'+S.stadiumLv+' '+STADIUM_NAMES[S.stadiumLv-1];
   $('play-sub').textContent=nextMatchLabel();
   $('idle-amount').textContent=fmt(idleAmount())+' コイン（毎分'+idleRatePerMin()+'）';
+  const idleBtn=$('btn-idle');if(idleBtn)idleBtn.disabled=idleAmount()<=0; // 貯まっていない時は受け取るボタンを押せない見た目にする
   $('home-news').innerHTML='📰 '+(S.news[0]||'');
   // ミッション進捗をホームでも見えるように（受取可能な報酬の見落とし防止）
   if(S.missions&&S.missions.list){
@@ -1000,10 +1002,11 @@ function sortPlayers(arr){const k=S._sort||'ovr';const cp=arr.slice();
 function doCamp(){
   if(S.campYear===S.year){toast('キャンプは年1回まで');return;}
   if(S.coins<500){toast('コインが足りない！（500必要）');return;}
-  S.coins-=500;S.campYear=S.year;
   const ys=S.players.filter(pl=>pl.age<=26).sort((a,b)=>overall(b)-overall(a)).slice(0,3);
-  ys.forEach(pl=>{const keys=pl.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k1=pick(keys);pl[k1]=clamp(pl[k1]+3,20,99);});
-  sfx('level');save();toast('🏕 キャンプ完了！ 若手3人が成長した');renderRoster();
+  if(!ys.length){toast('26歳以下の若手がいないので、キャンプは開けない（コインは消費しない）');return;}
+  S.coins-=500;S.campYear=S.year;
+  const grown=ys.map(pl=>{const keys=pl.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k1=pick(keys);pl[k1]=clamp(pl[k1]+3,20,99);return pl.name+'（'+STAT_JP[k1]+'+3）';});
+  sfx('level');save();toast('🏕 キャンプ完了！ '+grown.join('・')+' が成長した');renderRoster();
 }
 function doTrade(){
   if(S.tradeYear===S.year){toast('トレードは年1回まで');return;}
@@ -1038,7 +1041,7 @@ function doTrain(pid,key){
   if(p.inj>0){toast('🩹 故障中は特訓できない（あと'+p.inj+'試合）');return;}
   if(S.tp<3){toast('TPが足りない！ 試合やスカウトで貯めよう');return;}
   S.tp-=3;const up=ri(2,4);p[key]=clamp(p[key]+up,20,99);missionAdd('train',1);sfx('level');save();
-  toast(p.name+' の能力が +'+up+' 上がった！');popupN('+'+up,'#7be495');trainMenu(pid);refreshHUD();
+  toast(p.name+' の'+(STAT_JP[key]||'能力')+'が +'+up+' 上がった！');popupN('+'+up,'#7be495');trainMenu(pid);refreshHUD();
 }
 /* --- スカウト（ガチャ） --- */
 /* --- 写真インポート（本人の端末の写真だけを使う：外部送信なし・端末内保存） --- */
@@ -1258,7 +1261,7 @@ function updateSB(){
   $('sb-teams').innerHTML='<span>'+M.opp.short+' '+M.score.cpu+'</span> － <span class="me">⭐あなた '+M.score.me+'</span>';
   $('sb-inning').textContent=M.inning+'回'+(M.half==='top'?'表（守備）':'裏（攻撃）');
   $('sb-outs').textContent='アウト '+'●'.repeat(M.outs)+'○'.repeat(3-M.outs);
-  $('sb-count').innerHTML='<span class="cnt-b">B'+'●'.repeat(M.balls)+'○'.repeat(Math.max(0,4-M.balls))+'</span> <span class="cnt-s">S'+'●'.repeat(M.strikes)+'○'.repeat(Math.max(0,3-M.strikes))+'</span> <span class="cnt-o">O'+'●'.repeat(M.outs)+'○'.repeat(Math.max(0,3-M.outs))+'</span>';
+  $('sb-count').innerHTML='<span class="cnt-b">B'+'●'.repeat(M.balls)+'○'.repeat(Math.max(0,4-M.balls))+'</span> <span class="cnt-s">S'+'●'.repeat(M.strikes)+'○'.repeat(Math.max(0,3-M.strikes))+'</span>'; // アウトは sb-outs で別表示するため O は付けない（二重表示防止）
   if(M.lines){let h1='相手 ',h2='自軍 ';for(let i=0;i<Math.max(M.maxInn,M.inning);i++){h1+=(M.lines.cpu[i]==null?'·':M.lines.cpu[i])+' ';h2+=(M.lines.me[i]==null?'·':M.lines.me[i])+' ';}
     $('sb-lines').textContent=h1+' R'+M.score.cpu+' H'+(M.cpuHits||0)+'\n'+h2+' R'+M.score.me+' H'+M.teamHits;}
   // 盗塁・代打ボタンの可否を状況に合わせて切り替える（押せない理由を目で分かるように）
@@ -1928,7 +1931,7 @@ function finishMatch(){
   // ※ ss.ip は投球アウト数で保持し、表示時に回へ換算する簡易表記
   // 経験値とレベル
   let lvUps=[];
-  const gainExp=(p,amt)=>{p.exp+=amt;while(p.exp>=p.lv*30){p.exp-=p.lv*30;p.lv++;const keys=p.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k=pick(keys);p[k]=clamp(p[k]+ri(2,4),20,99);lvUps.push(p.name+'がLv'+p.lv+'に！（'+k+'アップ）');}};
+  const gainExp=(p,amt)=>{p.exp+=amt;while(p.exp>=p.lv*30){p.exp-=p.lv*30;p.lv++;const keys=p.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k=pick(keys);p[k]=clamp(p[k]+ri(2,4),20,99);lvUps.push(p.name+'がLv'+p.lv+'に！（'+STAT_JP[k]+'アップ）');}};
   M.lineup.forEach(p=>{const r=M.pa[p.id];gainExp(p,10+(r?r.h*8+r.hr*14:0));});
   gainExp(st,8+M.pit.k*3+M.pit.outs);
   // 報酬
@@ -2018,7 +2021,7 @@ function offseasonStart(){
   S.rival=pick(['山本由伸','今井達也','戸郷翔征','村上頌樹','宮城大弥','高橋宏斗','伊藤大海']);
   S.hrRace=null; // 本塁打王レースはシーズンごとに作り直す（前年の本数が翌年の開幕に残らないように）
   const young=S.players.filter(pl=>pl.age<=23&&pl.potential!=='C');
-  if(young.length&&Math.random()<0.6){const yp=pick(young);const kk=yp.kind==='P'?pick(['vel','brk']):pick(['meet','pow']);yp[kk]=clamp(yp[kk]+5,20,99);notes.push('🌟 若手覚醒！ '+yp.name+' の'+kk+'が+5');}
+  if(young.length&&Math.random()<0.6){const yp=pick(young);const kk=yp.kind==='P'?pick(['vel','brk']):pick(['meet','pow']);yp[kk]=clamp(yp[kk]+5,20,99);notes.push('🌟 若手覚醒！ '+yp.name+' の'+STAT_JP[kk]+'が+5');}
   S.career.seasons++;S.year++;S.phase='draft';
   save();
   return '<br>📅 オフシーズン：'+(notes.join(' / ')||'大きな動きなし')+'<br>次はドラフト会議！';
