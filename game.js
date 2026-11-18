@@ -885,7 +885,7 @@ function statHtml(p){
 }
 function playerCard(p,extra){
   return '<div class="card"><img class="portrait" src="'+drawPortrait(p&&p.team?p:Object.assign({},p,{team:'スターズ'}))+'"><span class="nm rarity-'+p.rarity+'">['+p.rarity+'] '+p.name+'</span>'+(p.real?' <span class="small">🌟実在選手（'+p.team+'）</span>':'')+' <span class="small">'+((p.inj>0)?'🩹故障中（あと'+p.inj+'試合） ':'')+((p.form>=2)?'🔥絶好調 ':'')+((p.form<=-2)?'❄絶不調 ':'')+((p.age>=37)?'⚠引退間近 ':'')+p.age+'歳 '+p.pos+' Lv'+p.lv+' 総合'+overall(p)+(p.skill?' / 特技:'+p.skill:'')+' / 将来性'+p.potential+'</span><br>'+
-  '<span class="small">'+statHtml(p)+'</span><br><span class="small">今季: '+(p.kind==='P'?('防御率相当 '+eraText(p)+' 奪三振'+p.ss.k+' 投球回'+(p.ss.ip/3).toFixed(1)):('打率 '+avgText(p)+' 本'+p.ss.hr+' 打点'+p.ss.rbi+' 安打'+p.ss.h+' 盗塁'+(p.ss.sb||0)))+'</span>'+(extra||'')+'<div class="flexrow" style="margin-top:5px"><button class="btn mini" onclick="setPlayerPhoto(\''+p.name+'\')">📷 写真を設定</button>'+((S.photos&&S.photos[p.name])?'<button class="btn mini sub" onclick="clearPlayerPhoto(\''+p.name+'\')">写真を消す</button>':'')+'</div></div>';
+  '<span class="small">'+statHtml(p)+'</span><br><span class="small">今季: '+(p.kind==='P'?('防御率相当 '+eraText(p)+' 奪三振'+p.ss.k+' 投球回'+(p.ss.ip/3).toFixed(1)):('打率 '+avgText(p)+' 本'+p.ss.hr+' 打点'+p.ss.rbi+' 安打'+p.ss.h+' 盗塁'+(p.ss.sb||0)))+'</span><div class="flexrow" style="margin-top:5px">'+(extra||'')+'<button class="btn mini" onclick="setPlayerPhoto(\''+p.name+'\')">📷 写真を設定</button>'+((S.photos&&S.photos[p.name])?'<button class="btn mini sub" onclick="clearPlayerPhoto(\''+p.name+'\')">写真を消す</button>':'')+'</div></div>';
 }
 /* --- シーズン --- */
 function renderSeason(){
@@ -1164,7 +1164,7 @@ function updateSB(){
   $('sb-inning').textContent=M.inning+'回'+(M.half==='top'?'表（守備）':'裏（攻撃）');
   $('sb-outs').textContent='アウト '+'●'.repeat(M.outs)+'○'.repeat(3-M.outs);
   $('sb-count').innerHTML='<span class="cnt-b">B'+'●'.repeat(M.balls)+'○'.repeat(Math.max(0,4-M.balls))+'</span> <span class="cnt-s">S'+'●'.repeat(M.strikes)+'○'.repeat(Math.max(0,3-M.strikes))+'</span> <span class="cnt-o">O'+'●'.repeat(M.outs)+'○'.repeat(Math.max(0,3-M.outs))+'</span>';
-  if(M.lines){let h1='相手 ',h2='自軍 ';for(let i=0;i<M.maxInn;i++){h1+=(M.lines.cpu[i]==null?'·':M.lines.cpu[i])+' ';h2+=(M.lines.me[i]==null?'·':M.lines.me[i])+' ';}
+  if(M.lines){let h1='相手 ',h2='自軍 ';for(let i=0;i<Math.max(M.maxInn,M.inning);i++){h1+=(M.lines.cpu[i]==null?'·':M.lines.cpu[i])+' ';h2+=(M.lines.me[i]==null?'·':M.lines.me[i])+' ';}
     $('sb-lines').textContent=h1+' R'+M.score.cpu+' H'+(M.cpuHits||0)+'\n'+h2+' R'+M.score.me+' H'+M.teamHits;}
   // 盗塁・代打ボタンの可否を状況に合わせて切り替える（押せない理由を目で分かるように）
   const stBtn=$('btn-steal');if(stBtn)stBtn.disabled=!(M.half==='bottom'&&!M.finished&&((M.bases[1]&&!M.bases[2])||(M.bases[0]&&!M.bases[1])));
@@ -1204,7 +1204,7 @@ function applyOutcome(side,outcome){
   }else{
     const hits={'1B':1,'2B':2,'3B':3,'HR':4}[outcome];
     if(isMe)recPA(batter.id,r=>{r.ab++;r.h++;if(outcome==='HR')r.hr++;});
-    if(outcome==='1B'){runs=(old[1]?1:0)+(old[2]?1:0);M.bases=[mark||true,old[0]?b[0]:null,null];if(old[0])M.bases[1]=b[0];}
+    if(outcome==='1B'){runs=(old[2]?1:0);const secondScores=old[1]&&Math.random()<0.72;if(secondScores)runs++;M.bases=[mark||true,old[0]?b[0]:null,(old[1]&&!secondScores)?b[1]:null];if(old[1]&&!secondScores)sayAdd('二塁走者は三塁でストップ。');}
     else if(outcome==='2B'){runs=(old[1]?1:0)+(old[2]?1:0);const firstScores=old[0]&&(isMe?batter.run>=48:Math.random()<0.7);if(firstScores)runs++;M.bases=[null,mark||true,old[0]&&!firstScores?b[0]:null];}
     else if(outcome==='3B'){runs=old.filter(Boolean).length;M.bases=[null,null,mark||true];}
     else if(outcome==='HR'){runs=old.filter(Boolean).length+1;M.bases=[null,null,null];}
@@ -1520,6 +1520,9 @@ function onBunt(){$('cursor-zone').classList.add('hidden');
   const bt=curMyBatter();const r=Math.random();
   if(r<0.18){if(M.strikes>=2){recPA(bt.id,x=>{x.ab++;});M.outs++;say('実況：バントはファウル…2ストライク後のバントファウルは三振！');sfx('out');paEnd();}else{M.strikes++;say('実況：バントはファウル。');afterPitchCount();}}
   else if(r<0.30){say('実況：バントが内野安打に！');applyOutcome('me','1B');paEnd();}
+  else if(M.outs>=2){ // 2アウトでは送りバントは成立しない（打者アウト＝チェンジで得点も入らない）ため、バントヒット狙いとして扱う
+    if(r<0.55){say('実況：2アウトからのバントヒット！ 意表を突いた！');applyOutcome('me','1B');paEnd();}
+    else{recPA(bt.id,x=>{x.ab++;});M.outs++;say('実況：バント失敗…2アウトでは送れない（打者アウト）。');sfx('out');paEnd();}}
   else{say('実況：きれいな送りバント！');recPA(bt.id,x=>{});applyOutcome('me','SAC');paEnd();}
 }
 function resolveContact(dz){
@@ -1620,7 +1623,8 @@ function flushPitcherStats(){
   M.pit={outs:0,k:0,er:0};
 }
 function reliefPitch(){
-  if(!M||M.finished||M.half!=='top'||M.ballLive||M.busy||meterActive)return;
+  if(!M||M.finished||M.half!=='top')return;
+  if(M.ballLive||M.busy||meterActive){toast('投球中は継投できない（投球の合間に押してね）');return;}
   if((M.relieved||0)>=2){toast('継投は1試合2回まで');return;}
   const used=new Set([M.starter.id].concat(M._usedPitchers||[]));
   const cand=S.players.filter(p=>p.kind==='P'&&!(p.inj>0)&&!used.has(p.id)).sort((a,b)=>overall(b)-overall(a))[0];
@@ -1634,7 +1638,9 @@ function reliefPitch(){
   buildStadium();renderPitchButtons();updateSB();save();
 }
 function pinchHit(){
-  if(!M||M.finished||M.half!=='bottom'||M.pinchUsed||M.ballLive)return;
+  if(!M||M.finished||M.half!=='bottom')return;
+  if(M.pinchUsed){toast('代打は1試合1回まで');return;}
+  if(M.ballLive){toast('投球中は代打できない（次の投球前に押してね）');return;}
   const cur=curMyBatter();
   const bench=S.players.filter(pl=>pl.kind==='B'&&!pl.retired&&!(pl.inj>0)&&!M.lineup.includes(pl))
     .sort((a,b)=>(b.meet+b.pow)-(a.meet+a.pow))[0];
@@ -1744,6 +1750,10 @@ function resolveCpuPitch(quality){
   if(M.balls>=4){say('実況：フォアボールを与えた…');applyOutcome('cpu','BB');updateSB();paEnd();return;}
   say('実況：ボール。際どいコースを外した。');updateSB();M.busy=false;renderPitchButtons();
 }
+function hidePitchUI(){ // シミュ/試合終了時に投球中UI（カーソルゾーン・投球中表示・ゾーン枠）を残さない
+  $('pitch-coming').classList.add('hidden');$('cursor-zone').classList.add('hidden');
+  if(P3.zoneFrame)P3.zoneFrame.visible=false;if(P3.targetRing)P3.targetRing.visible=false;
+}
 /* --- シミュレーション --- */
 function simOutcomePA(side){
   // 1打席分を確率だけで解決（配分：アウト約66% / 四球7% / 単打17% / 二塁打4.5% / 三塁打0.5% / 本塁打 約5%）
@@ -1781,7 +1791,7 @@ function applyOutcomeSim(side,outcome){ // applyOutcomeは打者index前提な�
 function simHalf(){
   if(!M||M.finished||M.busy)return;
   M.pitchToken=(M.pitchToken||0)+1;
-  tweens.length=0;M.ballLive=false;ballMesh.visible=false;
+  tweens.length=0;M.ballLive=false;ballMesh.visible=false;hidePitchUI();
   const targetHalf=M.half,targetInn=M.inning;let guard=0;
   while(!M.finished&&M.half===targetHalf&&M.inning===targetInn&&guard++<60){
     M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
@@ -1797,7 +1807,7 @@ function simHalf(){
 function simGame(){
   if(!M||M.finished)return;
   M.pitchToken=(M.pitchToken||0)+1;M.busy=false;
-  tweens.length=0;M.ballLive=false;ballMesh.visible=false;
+  tweens.length=0;M.ballLive=false;ballMesh.visible=false;hidePitchUI();
   let guard=0;
   while(!M.finished&&guard++<400){
     M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
@@ -1810,7 +1820,7 @@ function simGame(){
 
 /* --- 試合終了・シーズン進行 --- */
 function finishMatch(){
-  if(!M||M.finished)return;M.finished=true;meterActive=false;stopCrowd();
+  if(!M||M.finished)return;M.finished=true;meterActive=false;stopCrowd();hidePitchUI();
   $('bat-controls').classList.add('hidden');$('pitch-controls').classList.add('hidden');
   const win=M.score.me>M.score.cpu, draw=M.score.me===M.score.cpu;
   if(win)S._fireworks=true;
@@ -1947,7 +1957,7 @@ function bind(){
   const bSteal=$('btn-steal');if(bSteal)bSteal.onclick=onSteal;
   const bRelief=$('btn-relief');if(bRelief)bRelief.onclick=reliefPitch;
   $('screen-panel').addEventListener('click',e=>{if(e.target===$('screen-panel'))closePanel();});
-  $('btn-speed').onclick=()=>{speedMul=speedMul===1?2:1;$('btn-speed').textContent='⏩ '+speedMul+'x';toast('試合スピード '+speedMul+'倍');};
+  $('btn-speed').onclick=()=>{speedMul=speedMul===1?2:1;$('btn-speed').textContent='速度 '+speedMul+'x';toast('試合スピード '+speedMul+'倍');};
   $('btn-panel-close').onclick=closePanel;
   $('btn-play').onclick=()=>{ensureMissions();if(S.phase==='draft')openDraft();else startMatch();};
   $('btn-season').onclick=renderSeason;
