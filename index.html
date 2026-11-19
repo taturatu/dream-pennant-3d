@@ -38,6 +38,7 @@
   <div id="idle-box">
     <div>🏟️ 球場の観客収入（放置でも貯まる）</div>
     <div id="idle-amount">0 コイン</div>
+    <div style="font-size:10px;opacity:.8">最大8時間分まで貯まる</div>
     <button id="btn-idle" class="btn gold">受け取る</button>
   </div>
   <nav id="home-menu">
@@ -45,7 +46,7 @@
     <button class="menu-btn" id="btn-season">🏆 シーズン<span class="menu-sub">順位表・日程</span></button>
     <button class="menu-btn" id="btn-roster">👥 選手・育成<span class="menu-sub">特訓とオーダー</span></button>
     <button class="menu-btn" id="btn-scout">🔍 スカウト<span class="menu-sub">ガチャで新戦力</span></button>
-    <button class="menu-btn" id="btn-stadium">🏟️ 球場<span class="menu-sub">拡張して3Dで育てる</span></button>
+    <button class="menu-btn" id="btn-stadium">🏟️ 球場<span class="menu-sub" id="stadium-sub">拡張して3Dで育てる</span></button>
     <button class="menu-btn" id="btn-records">📖 記録・殿堂<span class="menu-sub">実績と球団史</span></button>
     <button class="menu-btn" id="btn-missions">🎯 ミッション<span class="menu-sub" id="missions-sub">毎日3つ</span></button>
   </nav>
@@ -58,7 +59,7 @@
     <div id="sb-teams"></div>
     <div id="sb-situation">
       <span id="sb-inning">1回表</span>
-      <span id="sb-outs">●○○ アウト</span>
+      <span id="sb-outs">アウト ●○○</span>
       <span id="sb-count">B○○○ S○○</span>
       <span id="sb-bases">◇ 空</span>
     </div>
@@ -94,10 +95,10 @@
       <button id="btn-sim-half" class="btn mini">⏩ この回をシミュ</button>
       <button id="btn-sim-game" class="btn mini">⏭️ 試合終了までシミュ</button>
       <button id="btn-speed" class="btn mini">速度 1x</button>
+      <button id="btn-cam" class="btn mini">📷 視点切替</button>
       <button id="btn-quit-game" class="btn mini danger">棄権</button>
     </div>
   </div>
-  <div id="result-banner" class="hidden"></div>
 </section>
 
 <!-- ===== 汎用パネル（シーズン/選手/スカウト/球場/記録/ミッション/ヘルプ） ===== -->
