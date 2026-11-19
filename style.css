@@ -126,6 +126,15 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;-webkit-user
 .pitch-btn{background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.03) 46%,rgba(0,0,0,.15) 54%,rgba(0,0,0,.27)),linear-gradient(180deg,#2c4a6b,#17293f 55%,#101f31);border:1px solid rgba(170,210,250,.42);border-radius:999px;padding:9px 15px;font-weight:800;font-size:14px;text-shadow:0 1px 2px rgba(0,0,0,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 4px 0 #050c15,0 8px 16px rgba(0,0,0,.5);transition:transform .06s,box-shadow .06s}
 .pitch-btn:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 0 #050c15,0 4px 8px rgba(0,0,0,.5)}
 .pitch-btn.sel{border-color:#ffe9a8;background:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,.05) 46%,rgba(120,70,0,.12) 54%,rgba(120,70,0,.24)),linear-gradient(180deg,#e8bc30,#a87c10 55%,#7d5c0a);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 0 #4c3803,0 0 18px rgba(255,217,77,.5)}
+.scout-line{padding:7px 4px;border-bottom:1px dashed rgba(255,255,255,.18);font-weight:700;cursor:pointer}
+.scout-line:last-child{border-bottom:none}
+.scout-line .rarity{float:right}
+/* 狙うコース選択（守備側・3×3グリッド） */
+#aim-zone{text-align:center}
+.aim-label{font-size:10.5px;font-weight:800;color:var(--txt-dim);text-shadow:0 1px 3px #000;margin-bottom:3px}
+#aim-grid{display:grid;grid-template-columns:repeat(3,32px);gap:3px;justify-content:center}
+.aim-cell{height:32px;border:1.5px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(10,22,40,.75);color:rgba(255,255,255,.55);font-size:11px;font-weight:800;padding:0}
+.aim-cell.sel{border-color:var(--gold);background:rgba(255,217,77,.28);color:var(--gold);box-shadow:0 0 10px rgba(255,217,77,.5)}
 #meter-wrap{width:320px;max-width:70vw;text-align:center}
 #meter-bar{position:relative;height:24px;background:linear-gradient(180deg,#08111c,#13202f);border:2px solid rgba(255,255,255,.85);border-radius:999px;overflow:hidden;box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 2px 5px rgba(0,0,0,.6)}
 #meter-sweet{position:absolute;left:43%;width:14%;top:0;bottom:0;background:linear-gradient(180deg,#fff3a0,var(--gold) 55%,var(--gold-2));box-shadow:0 0 16px rgba(255,217,77,.85)}
@@ -153,6 +162,11 @@ tr.me-row td{border-bottom-color:rgba(255,217,77,.4)}
 
 /* ===== 選手カード：プロスピ風（レア枠＋ランクバッジ＋レーダー） ===== */
 .card{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.2);border-left:4px solid #54687c;border-radius:var(--r-card);padding:10px 13px;margin-bottom:9px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.09)}
+/* :has 非対応の古いWebViewでもレア枠色が付くよう、カード自体のクラスでも指定する（H22） */
+.card.rar-card-R{border-left-color:var(--sky-2)}
+.card.rar-card-SR{border-left-color:#c792ff}
+.card.rar-card-SSR{border-color:rgba(255,217,77,.55);border-left-color:var(--gold);background:linear-gradient(180deg,rgba(255,217,77,.13),rgba(255,255,255,.035));box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 16px rgba(255,217,77,.16)}
+.card.rar-card-LEGEND{border:1px solid var(--gold);border-left:4px solid #ff7a59;background:linear-gradient(180deg,rgba(255,150,40,.16),rgba(255,255,255,.035));box-shadow:0 0 20px rgba(255,150,40,.32)}
 .card:has(.rarity-R){border-left-color:var(--sky-2)}
 .card:has(.rarity-SR){border-left-color:#c792ff}
 .card:has(.rarity-SSR){border-color:rgba(255,217,77,.55);border-left-color:var(--gold);background:linear-gradient(180deg,rgba(255,217,77,.13),rgba(255,255,255,.035));box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 16px rgba(255,217,77,.16)}
@@ -234,3 +248,24 @@ select.sort-sel{background:#0c1a2c;color:#eaf4ff;border:1.5px solid #3f74b5;bord
 .pos-chip.p1{background:linear-gradient(180deg,#ffe97a,#e8a90c);color:#3d2700;border-color:#fff3b0}
 .pos-chip.p2{background:linear-gradient(180deg,#f2f6fb,#aebfd2);color:#22303f}
 .pos-chip.p3{background:linear-gradient(180deg,#f0b27a,#b06a2e);color:#331b00}
+/* 縦持ち専用レイアウト（D10）：横前提の絶対配置を縦画面でも崩れない形に寄せる */
+@media (orientation:portrait){
+  #scoreboard{left:50%;transform:translateX(-50%);width:94vw;max-width:94vw;min-width:0;padding:5px 8px}
+  #sb-lines{font-size:10px}
+  #commentary{top:auto;bottom:128px;left:50%;transform:translateX(-50%);width:94vw;max-height:20vh}
+  #batter-card{left:50%;transform:translateX(-50%);width:94vw;bottom:236px}
+  #pitch-info{left:50%;transform:translateX(-50%);width:94vw;text-align:center;bottom:352px}
+  #cursor-zone{right:auto;left:50%;transform:translateX(-50%);bottom:250px}
+  #idle-box{top:auto;bottom:110px}
+}
+/* 狭幅でホームのタイトルと放置収入ボックスが重ならないように（H19）／通算サマリ行のはみ出し防止（H20） */
+@media (max-width:700px){
+  #idle-box{top:118px}
+  #home-record-line{max-width:92vw;white-space:normal;line-height:1.5}
+}
+/* OSの視差低減設定では常時アニメーションを止める（H23） */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}
+}
+/* キーボード操作時のフォーカス表示（H24） */
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}

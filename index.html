@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ドリームペナント3D 〜一生野球〜</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,9 +21,9 @@
     <div class="hud-chip">🪙 <span id="hud-coins">0</span></div>
     <div class="hud-chip">💪 <span id="hud-tp">0</span> TP</div>
     <div class="hud-chip">👥 <span id="hud-fans">0</span>人</div>
-    <button id="btn-help" class="hud-btn">？</button>
-    <button id="btn-mute" class="hud-btn">🔊</button>
-    <button id="btn-save" class="hud-btn">💾</button>
+    <button id="btn-help" class="hud-btn" aria-label="ヘルプ・遊び方" title="ヘルプ・遊び方">？</button>
+    <button id="btn-mute" class="hud-btn" aria-label="音量オン・オフ" title="音量オン・オフ">🔊</button>
+    <button id="btn-save" class="hud-btn" aria-label="セーブ" title="セーブ">💾</button>
   </div>
 </header>
 
@@ -79,11 +79,14 @@
       <button id="btn-take" class="btn sub">見送る</button>
       <button id="btn-bunt" class="btn sub">バント</button>
       <button id="btn-pinch" class="btn sub">代打</button>
+      <button id="btn-pinchrun" class="btn sub">代走</button>
       <button id="btn-steal" class="btn sub">💨 盗塁</button>
     </div>
     <!-- 守備時 -->
     <div id="pitch-controls" class="gctrl hidden">
       <div id="pitch-select"></div>
+      <div id="aim-zone" class="hidden"><div class="aim-label">🎯 狙うコース（隅は空振り↑・被弾リスク↑／もう一度タップで解除）</div><div id="aim-grid"></div></div>
+      <button id="btn-ibb" class="btn mini sub hidden" onclick="doIBB()">🚶 敬遠する（四球で歩かせる）</button>
       <div id="meter-wrap" class="hidden">
         <div id="meter-bar"><div id="meter-sweet"></div><div id="meter-needle"></div></div>
         <div class="meter-label">真ん中の金色で止めると完璧な1球！</div>
