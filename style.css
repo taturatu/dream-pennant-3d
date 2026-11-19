@@ -110,7 +110,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;-webkit-user
 @keyframes panelIn{from{transform:translateY(26px) scale(.97);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 #panel-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(90deg,rgba(255,217,77,.22),transparent 55%),repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 10px,transparent 10px 20px);border-bottom:2px solid #c9a227}
 #panel-title{font-size:20px;font-weight:800;letter-spacing:.5px;text-shadow:0 2px 5px #000}
-#panel-body{padding:12px 16px;overflow-y:auto;font-size:14px;line-height:1.6}
+#panel-body{padding:12px 16px 24px;overflow-y:auto;font-size:14px;line-height:1.6}
 table.stand{width:100%;border-collapse:collapse;font-size:13px}
 table.stand th,table.stand td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.12);text-align:center}
 table.stand th{background:rgba(201,162,39,.18);color:#ffd94d}

@@ -984,13 +984,15 @@ function playerCard(p,extra){
 function renderSeason(){
   const sorted=S.standings.map((t,i)=>({t,i,rate:t.w+t.l?t.w/(t.w+t.l):0})).sort((a,b)=>b.rate-a.rate||b.w-a.w);
   const lead=sorted[0];
-  const rows=sorted.map((x,r)=>{const gb=r===0?'--':(((lead.t.w-x.t.w)+(x.t.l-lead.t.l))/2).toFixed(1);
+  const noGames=S.standings.every(t=>!(t.w>0)&&!(t.l>0)&&!(t.d>0)); // 全チーム未消化の間はGBを全行「--」に統一（1位だけ「--」で他が0.0になる不揃いを防ぐ）
+  const rows=sorted.map((x,r)=>{const gb=(r===0||noGames)?'--':(((lead.t.w-x.t.w)+(x.t.l-lead.t.l))/2).toFixed(1);
     return '<tr class="'+(x.i===0?'me-row':'')+'"><td>'+(r+1)+'位 '+x.t.name+'</td><td>'+x.t.w+'</td><td>'+x.t.l+'</td><td>'+x.t.d+'</td><td>'+x.rate.toFixed(3)+'</td><td>'+gb+'</td></tr>';}).join('');
   openPanel('🏆 シーズン順位表（'+S.year+'年目・全24戦）',
    '<table class="stand"><tr><th>チーム</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>GB</th></tr>'+rows+'</table>'+
-   (()=>{if(!S.hrRace){S.hrRace=REAL_PLAYERS.filter(r=>r.pos!=='投手').sort(()=>Math.random()-0.5).slice(0,5).map(r=>({name:r.name,hr:0}));save();} // 開幕時は全員0本（試合ごとに finishMatch で増える）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする
+   (()=>{if(!S.hrRace){const ownedNames=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name));S.hrRace=REAL_PLAYERS.filter(r=>r.pos!=='投手'&&!ownedNames.has(r.name)).sort(()=>Math.random()-0.5).slice(0,5).map(r=>({name:r.name,hr:0}));save();} // 開幕時は全員0本（試合ごとに finishMatch で増える）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする。自軍加入済みの実在選手はレース側に入れない（二重表示防止）
      const mine=S.players.filter(pl=>pl.kind==='B').sort((a,b)=>b.ss.hr-a.ss.hr)[0];
-     const race=S.hrRace.concat(mine?[{name:mine.name+'（自軍）',hr:mine.ss.hr}]:[]).sort((a,b)=>b.hr-a.hr).slice(0,5);
+     const race=S.hrRace.filter(r=>!(mine&&r.name===mine.name)).concat(mine?[{name:mine.name+'（自軍）',hr:mine.ss.hr}]:[]).sort((a,b)=>b.hr-a.hr).slice(0,5);
+     if(!race.length||race[0].hr<=0)return '<h3 style="margin-top:10px">⚾ 本塁打王レース</h3><p class="small">まだ今季の本塁打は出ていない。最初の1本を打つのは誰だ？</p>'; // 全員0本の間は架空の順位を並べない
      return '<h3 style="margin-top:10px">⚾ 本塁打王レース</h3>'+race.map((r,i)=>'<div class="card">'+(i+1)+'位 '+r.name+' — '+r.hr+'本</div>').join('');})()+
    '<p class="small" style="margin-top:8px">次の試合：<b>'+nextMatchLabel()+'</b><br>3位以内でクライマックス進出、優勝で日本シリーズへ。シーズンは一生エンドレスに続く。選手は歳を取り、引退し、新人が入る。</p>'+
    '<div class="flexrow"><button class="btn gold" onclick="closePanel();startMatch();">⚾ 次の試合へ</button></div>');
@@ -1025,7 +1027,7 @@ function renderRoster(){
   if(!ps.length)ps=S.players.filter(p=>p.kind==='P').sort((a,b)=>overall(b)-overall(a));
   const tab=S._rosterTab||'all';
   let h='<div class="small">TP（特訓ポイント）は試合とスカウト重複で貯まる。特訓1回=3TPで選んだ能力+2〜4。Lvは試合経験で上がる。</div>'+
-  '<div class="flexrow" style="margin:6px 0"><select class="sort-sel" onchange="S._sort=this.value;renderRoster()"><option value="ovr"'+(S._sort==='ovr'?' selected':'')+'>総合順</option><option value="lv"'+(S._sort==='lv'?' selected':'')+'>Lv順</option><option value="age"'+(S._sort==='age'?' selected':'')+'>若い順</option><option value="hr"'+(S._sort==='hr'?' selected':'')+'>本塁打順</option></select><button class="btn mini" onclick="doCamp()">🏕 キャンプ(500)</button><button class="btn mini" onclick="doTrade()">🔁 トレード</button></div>'+
+  '<div class="flexrow" style="margin:6px 0"><select class="sort-sel" onchange="S._sort=this.value;renderRoster()"><option value="ovr"'+(S._sort==='ovr'?' selected':'')+'>総合順</option><option value="lv"'+(S._sort==='lv'?' selected':'')+'>Lv順</option><option value="age"'+(S._sort==='age'?' selected':'')+'>若い順</option><option value="hr"'+(S._sort==='hr'?' selected':'')+'>本塁打順</option></select><button class="btn mini" onclick="doCamp()"'+(S.campYear===S.year||S.coins<500?' disabled':'')+'>🏕 '+(S.campYear===S.year?'キャンプ済（年1回）':'キャンプ(500)')+'</button><button class="btn mini" onclick="doTrade()"'+(S.tradeYear===S.year?' disabled':'')+'>🔁 '+(S.tradeYear===S.year?'トレード済（年1回）':'トレード')+'</button></div>'+
   '<div class="flexrow" style="margin:2px 0 8px"><button class="btn mini'+(tab==='all'?' gold':' sub')+'" onclick="S._rosterTab=\'all\';renderRoster()">全員（'+S.players.length+'）</button><button class="btn mini'+(tab==='B'?' gold':' sub')+'" onclick="S._rosterTab=\'B\';renderRoster()">打者（'+bs.length+'）</button><button class="btn mini'+(tab==='P'?' gold':' sub')+'" onclick="S._rosterTab=\'P\';renderRoster()">投手（'+ps.length+'）</button></div>';
   if(tab!=='P')h+='<h3>打者</h3>'+bs.map(p=>playerCard(p,' <button class="btn mini" onclick="trainMenu('+p.id+')">特訓</button>')).join('');
   if(tab!=='B')h+='<h3>投手</h3>'+ps.map(p=>playerCard(p,' <button class="btn mini" onclick="trainMenu('+p.id+')">特訓</button>')).join('');
@@ -1034,11 +1036,12 @@ function renderRoster(){
 function trainMenu(pid){
   const p=S.players.find(x=>x.id===pid);if(!p)return;
   const stats=p.kind==='P'?[['vel','球速'],['ctl','制球'],['brk','変化'],['sta','体力']]:[['meet','ミート'],['pow','パワー'],['run','走力'],['def','守備']];
-  openPanel('💪 特訓：'+p.name,'<p>TP: '+S.tp+'（1回 3TP）</p>'+stats.map(s=>'<div class="card"><b>'+s[1]+'</b> 現在 '+p[s[0]]+' <button class="btn mini gold" onclick="doTrain('+pid+',\''+s[0]+'\')">+特訓</button></div>').join('')+'<button class="btn mini" onclick="renderRoster()">← 選手一覧へ</button>');
+  openPanel('💪 特訓：'+p.name,'<p>TP: '+S.tp+'（1回 3TP）</p>'+stats.map(s=>'<div class="card"><b>'+s[1]+'</b> 現在 '+p[s[0]]+' '+(p[s[0]]>=99?'<span class="small">👑 MAX（これ以上上がらない）</span>':'<button class="btn mini gold" onclick="doTrain('+pid+',\''+s[0]+'\')"'+(S.tp<3?' disabled':'')+'>+特訓</button>')+'</div>').join('')+'<button class="btn mini" onclick="renderRoster()">← 選手一覧へ</button>');
 }
 function doTrain(pid,key){
   const p=S.players.find(x=>x.id===pid);if(!p)return;
   if(p.inj>0){toast('🩹 故障中は特訓できない（あと'+p.inj+'試合）');return;}
+  if(p[key]>=99){toast('👑 その能力はもうMAX（99）だ');trainMenu(pid);return;}
   if(S.tp<3){toast('TPが足りない！ 試合やスカウトで貯めよう');return;}
   S.tp-=3;const up=ri(2,4);p[key]=clamp(p[key]+up,20,99);missionAdd('train',1);sfx('level');save();
   toast(p.name+' の'+(STAT_JP[key]||'能力')+'が +'+up+' 上がった！');popupN('+'+up,'#7be495');trainMenu(pid);refreshHUD();
@@ -1066,8 +1069,8 @@ function onPhotoFile(ev){
 function renderScout(resultHtml){
   openPanel('🔍 スカウト（1回 300コイン）',
    '<p>新しい選手を発掘する。確率は N 45% / R 30% / SR 17% / SSR 6.5% / <span class="rarity-LEGEND">LEGEND 1.5%</span>。<br>登録枠は打者16人・投手8人まで。枠がいっぱいの選手は加入せず、代わりにTP+5が入る。<br>📷 選手カードの「写真を設定」から、自分のスマホにある実写真をその選手の顔写真にできます（写真は端末の中だけに保存され、外に送られません）。</p>'+
-   '<div class="flexrow"><button class="btn gold big" onclick="doScout()">🔍 スカウトする（300）</button><button class="btn gold big" onclick="doScout10()">🔍 10連（2700・1回分お得）</button><span>所持コイン: '+fmt(S.coins)+'</span></div><p class="small">🎰 天井まであと '+(30-(S.scoutPity||0))+' 回（30回でSSR以上確定・10連でもカウント）</p>'+
-   '<div class="card" style="margin-top:10px"><b>🌟 リアル選手スカウト（800コイン）</b><br><span class="small">NPB12球団＋MLBの実在選手 '+REAL_PLAYERS.length+'名からランダムで1名が必ず加入！（未加入の選手のみ・登録枠に空きのある種別から選ばれる）大谷翔平・山本由伸・ジャッジ・村上宗隆…全員実名・実能力値。</span><br><button class="btn gold" onclick="doRealScout()">🌟 リアル選手を獲得する（800）</button></div>'+(resultHtml||''));
+   '<div class="flexrow"><button class="btn gold big" onclick="doScout()"'+(S.coins<300?' disabled':'')+'>🔍 スカウトする（300）</button><button class="btn gold big" onclick="doScout10()"'+(S.coins<2700?' disabled':'')+'>🔍 10連（2700・1回分お得）</button><span>所持コイン: '+fmt(S.coins)+'</span></div><p class="small">🎰 天井まであと '+(30-(S.scoutPity||0))+' 回（30回でSSR以上確定・10連でもカウント）</p>'+
+   '<div class="card" style="margin-top:10px"><b>🌟 リアル選手スカウト（800コイン）</b><br><span class="small">NPB12球団＋MLBの実在選手 '+REAL_PLAYERS.length+'名からランダムで1名が必ず加入！（未加入の選手のみ・登録枠に空きのある種別から選ばれる）大谷翔平・山本由伸・ジャッジ・村上宗隆…全員実名・実能力値。</span><br><button class="btn gold" onclick="doRealScout()"'+(S.coins<800?' disabled':'')+'>🌟 リアル選手を獲得する（800）</button></div>'+(resultHtml||''));
 }
 function scoutPull(){
   // 1回分の抽選（天井カウント共有）。戻り値 {p, joined, kind}
@@ -1123,7 +1126,7 @@ function renderStadium(){
   openPanel('🏟️ 球場：'+STADIUM_NAMES[lv-1]+'（Lv'+lv+'）',
    '<p>拡張するとホームの3D球場が実際に大きく育つ。観客収入（放置収益）とチケット収入が増える。</p>'+
    '<p>現在の毎分収入：<b>'+idleRatePerMin()+'コイン</b> / 収容ファン基盤：'+fmt(S.fans)+'人</p>'+
-   (lv>=10?'<p><b>最大まで育ちきった伝説の球場！</b></p>':'<div class="flexrow"><button class="btn gold" onclick="upgradeStadium()">拡張する（'+fmt(cost)+'コイン）→ '+STADIUM_NAMES[lv]+'</button></div>')+
+   (lv>=10?'<p><b>最大まで育ちきった伝説の球場！</b></p>':'<div class="flexrow"><button class="btn gold" onclick="upgradeStadium()"'+(S.coins<cost?' disabled':'')+'>拡張する（'+fmt(cost)+'コイン）→ '+STADIUM_NAMES[lv]+'</button></div>'+(S.coins<cost?'<p class="small">あと '+fmt(cost-S.coins)+' コインで拡張できる。</p>':''))+
    '<p class="small">Lv2で大型ビジョン（ホークスビジョン）、Lv3で照明塔と開閉式ドーム屋根が付く。Lvが上がるほどスタンドも大きくなる。</p>');
 }
 function upgradeStadium(){
@@ -1156,7 +1159,7 @@ function renderRecords(){
 /* --- ミッション --- */
 function renderMissions(){
   ensureMissions();
-  const h=S.missions.list.map((m,i)=>'<div class="card"><b>'+m.label+'</b> （'+m.prog+'/'+m.target+'） '+(m.claimed?'✅ 受取済':(m.prog>=m.target?'<button class="btn mini gold" onclick="claimMission('+i+')">報酬'+m.reward+'コイン受取</button>':'進行中'))+'</div>').join('');
+  const h=S.missions.list.map((m,i)=>'<div class="card"><b>'+m.label+'</b> （'+m.prog+'/'+m.target+'） <span class="small">報酬'+m.reward+'コイン</span> '+(m.claimed?'✅ 受取済':(m.prog>=m.target?'<button class="btn mini gold" onclick="claimMission('+i+')">受け取る</button>':'進行中'))+'</div>').join('');
   openPanel('🎯 今日のミッション',h+'<p class="small">ミッションは毎日0時に新しくなる。</p>');
 }
 function claimMission(i){const m=S.missions.list[i];if(!m||m.claimed||m.prog<m.target)return;m.claimed=true;S.coins+=m.reward;sfx('coin');save();renderMissions();refreshHUD();toast('報酬 '+m.reward+'コイン ゲット！');}
