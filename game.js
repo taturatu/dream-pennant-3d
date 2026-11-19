@@ -1565,15 +1565,15 @@ function updateSB(){
   const phBtn=$('btn-pinch');if(phBtn){phBtn.disabled=!!(M.pinchUsed||M.half!=='bottom'||M.finished);
     // 代打ボタンに起用候補の名前を出す（誰が出るか分かるように）
     if(M.pinchUsed)phBtn.textContent='代打（使用済）';
-    else if(M.half==='bottom'&&!M.finished){const curB=curMyBatter();const benchB=S.players.filter(pl=>pl.kind==='B'&&!pl.retired&&!(pl.inj>0)&&!M.lineup.includes(pl)).sort((a,b)=>(b.meet+b.pow)-(a.meet+a.pow))[0];
+    else if(M.half==='bottom'&&!M.finished&&M.lineup&&M.lineup.length){const curB=curMyBatter();const benchB=S.players.filter(pl=>pl.kind==='B'&&!pl.retired&&!(pl.inj>0)&&!M.lineup.includes(pl)).sort((a,b)=>(b.meet+b.pow)-(a.meet+a.pow))[0];
       phBtn.textContent=(benchB&&benchB.meet+benchB.pow>curB.meet+curB.pow+4)?'代打：'+benchB.name:'代打';}
     else phBtn.textContent='代打';}
   const prBtn2=$('btn-pinchrun');if(prBtn2){prBtn2.disabled=!!(M.pinchRunUsed||M.half!=='bottom'||M.finished||!M.bases.some(b=>b));
     if(M.pinchRunUsed)prBtn2.textContent='代走（使用済）';
-    else if(M.half==='bottom'&&!M.finished&&M.bases.some(b=>b)){const bb2=S.players.filter(pl=>pl.kind==='B'&&!(pl.inj>0)&&!M.lineup.includes(pl)).sort((a,b)=>b.run-a.run)[0];prBtn2.textContent=bb2?'代走：'+bb2.name:'代走';}
+    else if(M.half==='bottom'&&!M.finished&&M.bases.some(b=>b)&&M.lineup){const bb2=S.players.filter(pl=>pl.kind==='B'&&!(pl.inj>0)&&!M.lineup.includes(pl)).sort((a,b)=>b.run-a.run)[0];prBtn2.textContent=bb2?'代走：'+bb2.name:'代走';}
     else prBtn2.textContent='代走';}
   const rBtn=$('btn-relief');if(rBtn){const rLeft=2-(M.relieved||0);
-    if(rLeft>0&&M.half==='top'&&!M.finished){const used=new Set([M.starter.id].concat(M._usedPitchers||[]));const cand=starterPool().filter(p=>!(p.inj>0)&&!used.has(p.id)).sort((a,b)=>pitOverall(b)-pitOverall(a))[0];
+    if(rLeft>0&&M.half==='top'&&!M.finished){const used=new Set((M.starter?[M.starter.id]:[]).concat(M._usedPitchers||[]));const cand=starterPool().filter(p=>!(p.inj>0)&&!used.has(p.id)).sort((a,b)=>pitOverall(b)-pitOverall(a))[0];
       rBtn.textContent='🔄 継投（あと'+rLeft+'回）'+(cand?'：'+cand.name:'');}
     else rBtn.textContent=rLeft>0?'🔄 継投（あと'+rLeft+'回）':'🔄 継投（使用済）';
     rBtn.disabled=rLeft<=0||!!M.finished;}
@@ -2394,7 +2394,7 @@ function simHalf(){
   while(!M.finished&&M.half===targetHalf&&M.inning===targetInn&&guard++<60){
     M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
     if(M.outs>=3){M.outs=0;M.bases=[null,null,null];
-      if(M.half==='top'){M.pit.outs+=3;M.half='bottom';}else{M.half='top';M.inning++;}
+      if(M.half==='top'){M.pit.outs+=3-(M._pitCounted||0);M._pitCounted=0;M._inheritedLeft=0;M.half='bottom';}else{M.half='top';M.inning++;}
       break;}
     if(checkGameEnd())break;
   }
@@ -2411,7 +2411,7 @@ function simGame(){
   while(!M.finished&&guard++<400){
     M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
     if(M.outs>=3){M.outs=0;M.bases=[null,null,null];
-      if(M.half==='top'){M.pit.outs+=3;M.half='bottom';}else{M.half='top';M.inning++;}
+      if(M.half==='top'){M.pit.outs+=3-(M._pitCounted||0);M._pitCounted=0;M._inheritedLeft=0;M.half='bottom';}else{M.half='top';M.inning++;}
       if(checkGameEnd())break;}
     if(checkGameEnd())break;
   }
@@ -2430,7 +2430,7 @@ function finishMatch(){
   // 出場試合数の記録（N2：従来は記録自体がなかった）
   {const played=new Set(M.lineup.map(p=>p.id));Object.keys(M.pa).forEach(id=>played.add(+id));if(M.starter)played.add(M.starter.id);(M._expPitchers||[]).forEach(r=>played.add(r.id));
    played.forEach(id=>{const p=S.players.find(x=>x.id===id);if(p)p.ss.g=(p.ss.g||0)+1;});}
-  if(M.half==='top')M.pit.outs+=M.outs; // 終了時点の残アウトを投手記録へ（この行で最終回の途中アウトは pit.outs に入る）
+  if(M.half==='top')M.pit.outs+=Math.max(0,M.outs-(M._pitCounted||0)); // 終了時点の未精算アウトだけを投手記録へ（継投で精算済みの分は二重に数えない）
   const st=M.starter;if(st){st.ss.ip+=M.pit.outs;st.ss.k+=M.pit.k;st.ss.er+=M.pit.er;
     // 勝ち星は「最後にリードを奪った時点で投げていた投手」へ（E24：従来は最終投手に付いていた）。敗戦・セーブも記録する
     if(win){const wp=(M._leadPid&&S.players.find(x=>x.id===M._leadPid))||st;wp.ss.w=(wp.ss.w||0)+1;
