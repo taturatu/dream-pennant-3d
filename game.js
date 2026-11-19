@@ -588,17 +588,20 @@ function jerseyTexture(color,number){
   const t=new THREE.CanvasTexture(cv);_jerseyCache[key]=t;return t;
 }
 /* ===== 外部3Dモデル（選手：Quaternius CC0／球場："Ballpark" by Poly by Google, CC-BY 3.0, via Poly Pizza） ===== */
-const EXT={players:{},stadium:null,ready:false,failed:false};
+const EXT={players:{},stadium:null,ready:false,failed:false,noPlayers:false};
 function preloadExtModels(){
   if(!window.THREE||!THREE.GLTFLoader){EXT.failed=true;return;}
   const loader=new THREE.GLTFLoader();
+  // 低スペック端末（タッチ端末かつCPUコア2以下 or メモリ2GB以下）は選手GLBを読み込まず自作モデルで軽量化する（球場・テクスチャは通常どおり読み込む）
+  const lowSpec=matchMedia('(pointer:coarse)').matches&&((navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=2)||(navigator.deviceMemory&&navigator.deviceMemory<=2));
+  if(lowSpec)EXT.noPlayers=true;
   const keys=['casual','farmer','worker','adventurer','suit','hoodie','punk'];let pending=keys.length+1;
   // 外部テクスチャ（ambientCG・CC0）：芝と土。読み込みは非同期で、球場再構築のたびに差し替わる（失敗時は自作プロシージャルにフォールバック）
   const tl=new THREE.TextureLoader();
   tl.load('textures/grass.jpg',t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(9,9);EXT.grassTex=t;if(scene&&(!M||M.finished))buildStadium();},undefined,()=>{});
   tl.load('textures/dirt.jpg',t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);EXT.dirtTex=t;},undefined,()=>{});
   const done=()=>{if(--pending<=0){EXT.ready=true;if(scene&&(!M||M.finished))buildStadium();}}; // 読み込み完了後にホーム画面の球場も差し替える
-  keys.forEach(k=>{loader.load('models/player-'+k+'.glb',g=>{EXT.players[k]={scene:g.scene,animations:g.animations};done();},undefined,()=>{done();});});
+  keys.forEach(k=>{if(lowSpec){done();return;}loader.load('models/player-'+k+'.glb',g=>{EXT.players[k]={scene:g.scene,animations:g.animations};done();},undefined,()=>{done();});});
   loader.load('models/ballpark-a.glb',g=>{EXT.stadium=g.scene;done();},undefined,()=>{done();});
 }
 function glbPlay(g,name,once){
@@ -619,7 +622,7 @@ function glbUpdate(g,dt){
 }
 function makePlayer(color,accent,isBatter,person){
   person=person||{name:'選手'+ri(1,999)};
-  if(EXT.ready){const g=makePlayerGLB(color,accent,isBatter,person);if(g)return g;}
+  if(EXT.ready&&!EXT.noPlayers){const g=makePlayerGLB(color,accent,isBatter,person);if(g)return g;}
   return makePlayerPrimitive(color,accent,isBatter,person);
 }
 function makePlayerGLB(color,accent,isBatter,person){
@@ -933,12 +936,13 @@ function updateTrail(){ // 打球トレイル：頭が明るく尾が消える�
 function initGL(){
   const cv=$('gl');
   renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const coarsePtr=matchMedia('(pointer:coarse)').matches; // スマホ/タブレット等のタッチ端末では描画解像度と影を抑えて負荷を下げる
+  renderer.setPixelRatio(Math.min(devicePixelRatio,coarsePtr?1.5:2));
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();scene.fog=new THREE.Fog(0x9fc8e8,70,150);
   camera=new THREE.PerspectiveCamera(55,1,0.1,320);
   const light=new THREE.DirectionalLight(0xffffff,1.05);light.position.set(24,38,16);
-  light.castShadow=true;light.shadow.mapSize.set(2048,2048);
+  light.castShadow=true;light.shadow.mapSize.set(coarsePtr?1024:2048,coarsePtr?1024:2048);
   light.shadow.camera.left=-46;light.shadow.camera.right=46;light.shadow.camera.top=46;light.shadow.camera.bottom=-46;light.shadow.camera.far=110;light.shadow.bias=-0.0006;
   scene.add(light);scene.userData.sun=light;
   const hemi=new THREE.HemisphereLight(0xcfe8ff,0x3a6b35,0.5);scene.add(hemi);scene.userData.hemi=hemi;
@@ -948,10 +952,11 @@ function initGL(){
   ballTrailLine.frustumCulled=false;scene.add(ballTrailLine);
   function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
   addEventListener('resize',resize);resize();
-  let last=performance.now(),frameAcc=0,frameN=0,qualityChecked=false;
+  let last=performance.now(),frameAcc=0,frameN=0,qualityStage=0;
   (function loop(now){requestAnimationFrame(loop);const dt=Math.min(0.05,(now-last)/1000);last=now;stepTweens(dt);if(freezeT>0)freezeT-=dt;if(slowT>0)slowT-=dt;if(shakeAmp>0)shakeAmp=Math.max(0,shakeAmp-dt*1.5);if(fovPunch>0)fovPunch=Math.max(0,fovPunch-dt*3.0);tickMeter(now);
     frameAcc+=dt;frameN++;
-    if(!qualityChecked&&frameN>240){qualityChecked=true;if(frameAcc/frameN>0.045){renderer.shadowMap.enabled=false;if(scene.userData.sun)scene.userData.sun.castShadow=false;}} // 低速端末は影を切って軽く
+    if(qualityStage===0&&frameN>110){qualityStage=1;if(frameAcc/frameN>0.05){renderer.setPixelRatio(1.25);renderer.shadowMap.enabled=false;if(scene.userData.sun)scene.userData.sun.castShadow=false;}} // 低速端末は早めに解像度と影を落として軽く（1段目）
+    else if(qualityStage===1&&frameN>260){qualityStage=2;if(frameAcc/frameN>0.045&&renderer.shadowMap.enabled){renderer.shadowMap.enabled=false;if(scene.userData.sun)scene.userData.sun.castShadow=false;}} // 2段目：影だけ切る
     if(ballMesh){if(ballMesh.visible){trailPts.push(ballMesh.position.clone());if(trailPts.length>26)trailPts.shift();updateTrail();}
       else if(trailPts.length){trailPts=[];updateTrail();}}
     const t=now*0.001;
@@ -2213,6 +2218,7 @@ function myPitches(){
 function renderPitchButtons(){
   const list=myPitches();if(!list.find(x=>x.k===selPitch))selPitch='fast';
   $('pitch-select').innerHTML=list.map(x=>'<button class="pitch-btn '+(x.k===selPitch?'sel':'')+'" onclick="choosePitch(\''+x.k+'\')"><i class="pdot" style="background:#'+(PITCH_COLORS[x.k]||0xffffff).toString(16).padStart(6,'0')+'"></i>'+x.label+'</button>').join('');
+  $('pitch-select').scrollLeft=0; // スマホの横スクロール行は打席ごとに先頭（ストレート）へ戻す
   $('meter-wrap').classList.add('hidden');$('btn-throw').classList.add('hidden');
   renderAimGrid();
   const ibb=$('btn-ibb');if(ibb)ibb.classList.remove('hidden');
