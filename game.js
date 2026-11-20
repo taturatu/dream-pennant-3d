@@ -1111,8 +1111,9 @@ function renderSeason(){
    '<div style="overflow-x:auto"><table class="stand"><tr><th>チーム</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>GB</th><th>残</th></tr>'+rows+'</table></div>'+(csNote?'<p class="small" style="margin-top:6px">'+csNote+'</p>':'')+
    (()=>{if(!S.hrRace){const ownedNames=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name+'|'+pl.team));S.hrRace=shuffle(REAL_PLAYERS.filter(r=>r.pos!=='投手'&&!ownedNames.has(r.name+'|'+r.team))).slice(0,5).map(r=>({name:r.name,team:r.team,hr:0}));save();} // シャッフルは Fisher-Yates（sort(ランダム) の偏り回避）、重複名は名前+球団で判定 // 開幕時は全員0本（試合ごとに finishMatch で増える）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする。自軍加入済みの実在選手はレース側に入れない（二重表示防止）
      cleanRace(); // 加入後にレース側へ残った別人格を除く（C9）
-     const mine=S.players.filter(pl=>pl.kind==='B').sort((a,b)=>b.ss.hr-a.ss.hr)[0];
-     const race=S.hrRace.filter(r=>!(mine&&r.name===mine.name)).concat(mine?[{name:mine.name+'（自軍）',hr:mine.ss.hr}]:[]).sort((a,b)=>b.hr-a.hr).slice(0,5);
+     const mineList=S.players.filter(pl=>pl.kind==='B'&&pl.ss.hr>0).sort((a,b)=>b.ss.hr-a.ss.hr).slice(0,2); // 自軍はトップ2までレースに載せる（従来は1位だけだった）
+     const mineNames=new Set(mineList.map(m=>m.name));
+     const race=S.hrRace.filter(r=>!mineNames.has(r.name)).concat(mineList.map(m=>({name:m.name+'（自軍）',hr:m.ss.hr}))).sort((a,b)=>b.hr-a.hr).slice(0,5);
      if(!race.length||race[0].hr<=0)return '<h3 style="margin-top:10px">⚾ 本塁打王レース</h3><p class="small">まだ今季の本塁打は出ていない。最初の1本を打つのは誰だ？</p>'; // 全員0本の間は架空の順位を並べない
      return '<h3 style="margin-top:10px">⚾ 本塁打王レース</h3>'+race.map((r,i)=>'<div class="card"><span class="pos-chip p'+(i+1)+'">'+(i+1)+'</span> '+r.name+' — <b>'+r.hr+'本</b></div>').join('');})()+
    (()=>{if(S.phase!=='season')return '';const od=CPU_TEAMS[(S.gameNo-1)%CPU_TEAMS.length];const opp=cpuTeamGen(od,0);const tp=opp.pitcher;const ms=myStarter();const oIdx=sorted.findIndex(x=>x.t.name===od.name);return '<div class="card" style="margin-top:10px">🔍 次戦プレビュー<br>相手：<b>'+od.name+'</b>（総合力 '+opp.str+(oIdx>=0?'・現在'+(oIdx+1)+'位':'')+'）<br>相手先発：<b>'+tp.name+'</b>（球速目安 約'+Math.round(118+tp.vel*0.42)+'km/h）<br>自軍先発予定：<b>'+(ms?ms.name:'未定')+'</b>'+(ms?'（投手総合'+pitOverall(ms)+'）':'')+'<br><span class="small">※実際の試合と同じ生成（ローテーション・年次ボーナス込み）で算出</span></div>';})()+ // プレビューは実試合と同じ cpuTeamGen を通す（A9）。自軍先発予定（N4）と相手の現在順位（N66）も出す
@@ -1374,6 +1375,8 @@ function renderRecords(){
   const bs=S.players.filter(p=>p.kind==='B'), ps=S.players.filter(p=>p.kind==='P');
   const top=(arr,fn,fmtFn)=>arr.slice().sort((a,b)=>fn(b)-fn(a)).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> <span class="small">'+fmtFn(p)+'</span></div>').join('');
   const abMin=[30,10,1].find(t=>bs.some(p=>p.ss.ab>=t))||30; // 打率ランキングの規定打席：シーズン序盤は30打席到達者がいないため段階的に下げる
+  const eraMin=[27,9,3,1].find(t=>ps.some(p=>(p.ss.ip||0)>=t))||27; // 防御率ランキングの規定投球回（アウト数換算）も序盤は段階的に下げる
+  const eraHtml=ps.filter(p=>(p.ss.ip||0)>=eraMin).slice().sort((a,b)=>(a.ss.er/Math.max(1,a.ss.ip))-(b.ss.er/Math.max(1,b.ss.ip))).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> <span class="small">防御率 '+eraText(p)+'（投球回'+ipText(p.ss.ip)+'）</span></div>').join(''); // 防御率は小さい順（他の部門と違い昇順）
   // 記録ゼロの部門は「まだ記録なし」を部門ごとに繰り返さず、末尾に1行へまとめる
   const cats=[
    ['打率（'+abMin+'打席以上）',top(bs.filter(p=>p.ss.ab>=abMin),p=>p.ss.ab?p.ss.h/p.ss.ab:0,p=>avgText(p)+'（'+p.ss.h+'安打）')],
@@ -1381,6 +1384,8 @@ function renderRecords(){
    ['打点',top(bs.filter(p=>p.ss.rbi>0),p=>p.ss.rbi,p=>p.ss.rbi+'打点')],
    ['盗塁',top(bs.filter(p=>(p.ss.sb||0)>0),p=>p.ss.sb||0,p=>(p.ss.sb||0)+'盗塁')],
    ['奪三振',top(ps.filter(p=>p.ss.k>0),p=>p.ss.k,p=>p.ss.k+'奪三振 / 防御率相当 '+eraText(p))],
+   ['勝利',top(ps.filter(p=>(p.ss.w||0)>0),p=>p.ss.w||0,p=>(p.ss.w||0)+'勝'+((p.ss.l)?' '+p.ss.l+'敗':'')+((p.ss.sv)?' '+p.ss.sv+'セーブ':''))], // 投手部門に勝利ランキングも（従来は奪三振だけだった）
+   ['防御率（投球回'+Math.max(1,Math.floor(eraMin/3))+'回以上）',eraHtml],
   ];
   const leaders='<h3>📊 今季チーム内ランキング</h3>'+
    cats.filter(c=>c[1]).map(c=>'<p class="small" style="margin-top:6px">'+c[0]+'</p>'+c[1]).join('')+
@@ -1397,7 +1402,7 @@ function renderRecords(){
 /* --- ミッション --- */
 function renderMissions(){
   ensureMissions();
-  const h=S.missions.list.map((m,i)=>'<div class="card"><b>'+m.label+'</b> （'+m.prog+'/'+m.target+'） <span class="statbar"><i style="width:'+clamp(Math.round(m.prog/m.target*100),0,100)+'%"></i></span> <span class="small">報酬'+m.reward+'コイン</span> '+(m.claimed?'✅ 受取済':(m.prog>=m.target?'<button class="btn mini gold" onclick="claimMission('+i+')">受け取る</button>':'進行中'))+'</div>').join('');
+  const h=S.missions.list.map((m,i)=>'<div class="card'+(!m.claimed&&m.prog>=m.target?' mission-ready':'')+'"><b>'+m.label+'</b> （'+m.prog+'/'+m.target+'） <span class="statbar"><i style="width:'+clamp(Math.round(m.prog/m.target*100),0,100)+'%"></i></span> <span class="small">報酬'+m.reward+'コイン</span> '+(m.claimed?'✅ 受取済':(m.prog>=m.target?'<button class="btn mini gold" onclick="claimMission('+i+')">受け取る</button>':'進行中'))+'</div>').join(''); // 受取可能なミッションはカード自体も金色に光らせて見落としを防ぐ
   openPanel('🎯 今日のミッション',h+(S.missions.list.every(m=>m.claimed)?'<p>🎉 今日のミッションは全て完了！ お疲れさま。明日0時に新しいミッションが届くよ。</p>':'')+'<p class="small">ミッションは毎日0時に新しくなる。</p>');
 }
 function claimMission(i){const m=S.missions.list[i];if(!m||m.claimed||m.prog<m.target)return;m.claimed=true;S.coins+=m.reward;sfx('coin');save();renderMissions();refreshHUD();toast('報酬 '+m.reward+'コイン ゲット！');}
@@ -1526,7 +1531,7 @@ function startMatch(){
   M={phase:S.phase,label,oppDef,opp:cpuTeamGen(oppDef,bonus),lineup:buildLineup(),starter:myStarter(),
      inning:1,half:'top',outs:0,balls:0,strikes:0,bases:[null,null,null],score:{me:0,cpu:0},
      li:0,ci:0,busy:false,ballLive:false,ballP:0,swungEarly:false,finished:false,
-     pa:{},pit:{outs:0,k:0,er:0},teamHits:0,teamHr:0,teamK:0,teamEr:0,maxInn:INN_DEFAULT,lines:{me:[],cpu:[]},gameStats:{},oppPitches:0,myPitches:0,pinchUsed:false,relieved:0,_usedPitchers:[]};
+     pa:{},steals:{},pit:{outs:0,k:0,er:0},teamHits:0,teamHr:0,teamK:0,teamEr:0,maxInn:INN_DEFAULT,lines:{me:[],cpu:[]},gameStats:{},oppPitches:0,myPitches:0,pinchUsed:false,relieved:0,_usedPitchers:[]};
   const faMine=assignPositions(M.lineup);M.fieldAssign=faMine.assign;M.defMismatch=faMine.mismatch; // 守備位置の割り当て（C2）
   const restGap=S.gameNo-(M.starter.lastPitGame||-99);M.restFatigue=(restGap<=1&&S.phase==='season')?15:0; // 先発の休養（E16）
   const forcedNote=lastForcedIds.length?'<br>🩹 人数不足のため故障を押して出場：'+M.lineup.filter(p=>lastForcedIds.includes(p.id)).map(p=>p.name).join('、'):'';
@@ -1550,8 +1555,8 @@ function beginMatch(inn){
     const iv=setInterval(()=>{if(EXT.ready||EXT.failed||Date.now()-t0>8000){clearInterval(iv);beginMatch(inn);}},250);return;}
   M.begun=true;
   try{if(window.NativeApp)NativeApp.keepAwake(true);}catch(e){}
-  if(!S.tutoDone){S.tutoDone=true;save();setTimeout(()=>toast('📖 守備：球種→メーターを金ゾーンで止めてリリース！',3600),600);
-    setTimeout(()=>toast('📖 打撃：ボールが届く瞬間にスイング！ カーソルで狙うと芯に当たる',4200),5200);}
+  if(!S.tutoDone){S.tutoDone=true;save();const mRef=M;setTimeout(()=>{if(M===mRef&&!M.finished)toast('📖 守備：球種→メーターを金ゾーンで止めてリリース！',3600);},600);
+    setTimeout(()=>{if(M===mRef&&!M.finished)toast('📖 打撃：ボールが届く瞬間にスイング！ カーソルで狙うと芯に当たる',4200);},5200);} // 予約トーストは、その試合が終わっていたら出さない（シミュで即終了した試合の結果モーダルに重なる事故防止）
   M.maxInn=inn;$('modal').classList.add('hidden');modalCb=null;modalBackSafe=false;
   $('hud-season').style.visibility='hidden';
   $('screen-home').classList.add('hidden');$('screen-panel').classList.add('hidden');$('screen-game').classList.remove('hidden');
@@ -1633,8 +1638,8 @@ function applyOutcome(side,outcome){
   if(outcome!=='K'&&outcome!=='OUT'&&isMe)recPA(batter.id,r=>{r.rbi+=runs;}); // 押し出し四球・犠打の打点も公式どおり加算
   if(isMe&&runs>0){const gs2=M.gameStats[batter.id]=M.gameStats[batter.id]||{h:0,hr:0,rbi:0,k:0};gs2.rbi+=runs;}
   if(outcome==='BB'&&isMe)recPA(batter.id,r=>{});
-  if(isMe){M.score.me+=runs;if(runs>0&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id;} // リードを奪った時点の投手を記録（E24）
-  else{M.score.cpu+=runs;let erR=runs;
+  if(isMe){const wasAhead=M.score.me>M.score.cpu;M.score.me+=runs;if(runs>0&&!wasAhead&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id;} // リードを「奪った」瞬間の投手だけを勝ち投手候補にする（E24改：リード中の追加点で上書きすると、先発が作ったリードを継投投手の勝ち星にしてしまう）
+  else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu+=runs;if(runs>0&&!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id;let erR=runs; // 決勝点を奪われた投手（敗戦投手）も同じく「奪われた瞬間」で記録する
     if(M._inheritedLeft>0){const take=Math.min(erR,M._inheritedLeft);const ip=S.players.find(x=>x.id===M._inheritedPid);if(ip)ip.ss.er+=take;M._inheritedLeft-=take;erR-=take;} // 残した走者の得点は降板投手の自責（E3）
     M.pit.er+=erR;M.teamEr=(M.teamEr||0)+runs;}
   if(runs>0&&M.lines){const arr=isMe?M.lines.me:M.lines.cpu;arr[M.inning-1]=(arr[M.inning-1]||0)+runs;}
@@ -1648,8 +1653,8 @@ function outPlayExtras(isMe,deep,outsBefore){ // 凡退時の併殺と犠牲フ�
   if(outsBefore>1)return;
   if(deep&&M.bases[2]){ // 犠牲フライ：深い外野フライで三塁走者がタッチアップ
     M.bases[2]=null;
-    if(isMe){M.score.me++;const bt=curMyBatter();recPA(bt.id,r=>{r.rbi++;});const gs=M.gameStats[bt.id]=M.gameStats[bt.id]||{h:0,hr:0,rbi:0,k:0};gs.rbi++;}
-    else{M.score.cpu++;M.pit.er++;M.teamEr=(M.teamEr||0)+1;}
+    if(isMe){const wasAhead=M.score.me>M.score.cpu;M.score.me++;if(!wasAhead&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id;const bt=curMyBatter();recPA(bt.id,r=>{r.rbi++;});const gs=M.gameStats[bt.id]=M.gameStats[bt.id]||{h:0,hr:0,rbi:0,k:0};gs.rbi++;} // 犠飛の勝ち越しも勝ち投手記録の対象（従来はこの経路だけ _leadPid が付かなかった）
+    else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu++;if(!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id;M.pit.er++;M.teamEr=(M.teamEr||0)+1;}
     if(M.lines){const arr=isMe?M.lines.me:M.lines.cpu;arr[M.inning-1]=(arr[M.inning-1]||0)+1;}
     sayAdd('犠牲フライ！ 三塁走者が生還！ スコア '+M.score.cpu+' - '+M.score.me);updateSB();updateRunners3D();return;
   }
@@ -2118,10 +2123,10 @@ function onSteal(){
   const pSucc=stealProb(runner,spd);
   M.bases[from]=null;
   if(Math.random()<pSucc){
-    M.bases[from+1]=rid;if(runner)runner.ss.sb=(runner.ss.sb||0)+1;
+    M.bases[from+1]=rid;if(typeof rid==='number'){(M.steals=M.steals||{});const sr=M.steals[rid]=M.steals[rid]||{sb:0,sbf:0};sr.sb++;} // 盗塁は他の成績と同じく試合終了時に一括反映する（従来は ss へ即書きで、継投時の途中セーブで未完の試合の盗塁だけが残る不整合があった）
     say('実況：走った！ 盗塁成功！ '+(runner?runner.name+'（走力'+spd+'）':'走者')+'が'+(from+2)+'塁へ！');sfx('hit');vib('0,30');
   }else{
-    M.outs++;if(runner)runner.ss.sbf=(runner.ss.sbf||0)+1; // 盗塁死も記録する（E7：成功率が後から分かるように）
+    M.outs++;if(typeof rid==='number'){(M.steals=M.steals||{});const sr2=M.steals[rid]=M.steals[rid]||{sb:0,sbf:0};sr2.sbf++;} // 盗塁死も記録する（E7：成功率が後から分かるように）
     say('実況：盗塁失敗…タッチアウト！ あと少しだった。');sfx('out');
   }
   updateRunners3D();updateSB();
@@ -2441,6 +2446,7 @@ function finishMatch(){
   S.career.hits+=M.teamHits;S.career.hr+=M.teamHr;S.career.ks+=M.teamK; // 通算は試合終了時に一括反映（A6）
   // 選手スタッツ反映
   Object.keys(M.pa).forEach(id=>{const p=S.players.find(x=>x.id==id);if(!p)return;const r=M.pa[id];p.ss.ab+=r.ab;p.ss.h+=r.h;p.ss.hr+=r.hr;p.ss.rbi+=r.rbi;});
+  Object.keys(M.steals||{}).forEach(id=>{const p=S.players.find(x=>x.id==id);if(!p)return;const r=M.steals[id];p.ss.sb=(p.ss.sb||0)+(r.sb||0);if(r.sbf)p.ss.sbf=(p.ss.sbf||0)+r.sbf;}); // 盗塁・盗塁死も試合終了時に一括反映（打撃成績と同じタイミングに統一）
   // 出場試合数の記録（N2：従来は記録自体がなかった）
   {const played=new Set(M.lineup.map(p=>p.id));Object.keys(M.pa).forEach(id=>played.add(+id));if(M.starter)played.add(M.starter.id);(M._expPitchers||[]).forEach(r=>played.add(r.id));
    played.forEach(id=>{const p=S.players.find(x=>x.id===id);if(p)p.ss.g=(p.ss.g||0)+1;});}
@@ -2449,7 +2455,7 @@ function finishMatch(){
     // 勝ち星は「最後にリードを奪った時点で投げていた投手」へ（E24：従来は最終投手に付いていた）。敗戦・セーブも記録する
     if(win){const wp=(M._leadPid&&S.players.find(x=>x.id===M._leadPid))||st;wp.ss.w=(wp.ss.w||0)+1;
       if(st!==wp&&(M.score.me-M.score.cpu)<=3&&(M._usedPitchers||[]).length)st.ss.sv=(st.ss.sv||0)+1;}
-    else if(!draw){st.ss.l=(st.ss.l||0)+1;}}
+    else if(!draw){const lp=(M._cpuLeadPid&&S.players.find(x=>x.id===M._cpuLeadPid))||st;lp.ss.l=(lp.ss.l||0)+1;}} // 敗戦は最終投手でなく決勝点を奪われた投手へ（勝ち星の _leadPid と対称に）
   // ※ ss.ip は投球アウト数で保持し、表示時に回へ換算する簡易表記
   // 経験値とレベル
   let lvUps=[];
@@ -2461,7 +2467,7 @@ function finishMatch(){
   gainExp(st,8+M.pit.k*3+M.pit.outs);
   st.lastPitGame=S.gameNo;(M._expPitchers||[]).forEach(rec=>{const p=S.players.find(x=>x.id===rec.id);if(p)p.lastPitGame=S.gameNo;}); // 登板間隔の記録（E16）
   // 報酬（MVPボーナス+50も「獲得コイン」に合算し、表示と実額を一致させる）
-  const mvpBat=M.lineup.reduce((a,p)=>{const r=M.pa[p.id];const v=r?r.h*2+r.hr*5+r.rbi:0;return v>(a.v||-1)?{p,v}:a;},{});
+  const mvpBat=Object.keys(M.pa).reduce((a,id)=>{const p=S.players.find(x=>x.id==id);if(!p)return a;const r=M.pa[id];const v=r.h*2+r.hr*5+r.rbi;return v>(a.v||-1)?{p,v}:a;},{}); // MVP候補は打席に立った全員（従来は終了時点のラインナップだけで、代打・代走で退いた選手の活躍が対象外だった）
   // 投手もMVP候補に（E23：完封・大量奪三振の投手が報われるように）。スコア＝投球アウト数＋奪三振×2−自責×3
   const pitScore=(M.pit.outs+(M.half==='top'?M.outs:0))+M.pit.k*2-M.pit.er*3+(M._expPitchers||[]).reduce((s,r)=>s+r.outs+r.k*2,0);
   const mvp=(pitScore>(mvpBat.v||0)&&st)?{p:st,v:pitScore,pitcher:true}:mvpBat;
@@ -2510,7 +2516,7 @@ function finishMatch(){
     seasonNote='<br>シーズン成績：'+me.w+'勝'+me.l+'敗'+me.d+'分（現在'+rankAfter+'位'+(rankAfter<rankBefore?' ↑'+(rankBefore-rankAfter):rankAfter>rankBefore?' ↓'+(rankAfter-rankBefore):'')+'）';
   }
   save();checkAch();
-  const perf=M.lineup.map(p=>({p,g:M.gameStats[p.id]})).filter(x=>x.g&&(x.g.h>0||x.g.rbi>0)).sort((a,b)=>(b.g.h*2+b.g.hr*5+b.g.rbi)-(a.g.h*2+a.g.hr*5+a.g.rbi)).slice(0,3);
+  const perf=Object.keys(M.gameStats).map(id=>({p:S.players.find(x=>x.id==+id),g:M.gameStats[id]})).filter(x=>x.p&&x.g&&(x.g.h>0||x.g.rbi>0)).sort((a,b)=>(b.g.h*2+b.g.hr*5+b.g.rbi)-(a.g.h*2+a.g.hr*5+a.g.rbi)).slice(0,3); // 「今日の打撃」も交代で退いた選手を含める（MVPと同じ理由）
   const perfHtml=perf.length?'<br>📊 今日の打撃：'+perf.map(x=>x.p.name+' '+x.g.h+'安打'+(x.g.hr?'・'+x.g.hr+'本塁打':'')+'・'+x.g.rbi+'打点').join(' ／ '):'';
   const perfPitch='<br>⚾ 投手陣：奪三振'+M.teamK+' / 失点'+(M.teamEr||0)+((M.relieved||0)?'（継投'+M.relieved+'回）':'');
   let nextNote='';
