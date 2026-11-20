@@ -1013,6 +1013,15 @@ function showHome(){
   $('hud-season').style.visibility='visible';
   $('screen-game').classList.add('hidden');$('screen-panel').classList.add('hidden');$('screen-home').classList.remove('hidden');
   setCam('hub');buildStadium();refreshHUD();
+  const hn=$('home-next'); // ホームの次戦プレビュー帯（シーズンパネルを開かなくても相手と先発が分かるように）
+  if(hn){try{
+    if(S.phase==='season'){const od=CPU_TEAMS[(S.gameNo-1)%CPU_TEAMS.length];const opp=cpuTeamGen(od,0);const ms=myStarter();
+      hn.innerHTML='🔍 次戦プレビュー：<b>'+od.name+'</b>（総合力 '+opp.str+'） 先発 '+opp.pitcher.name+' ｜ 自軍先発予定 '+(ms?('<b>'+ms.name+'</b>（投手総合'+pitOverall(ms)+'）'):'未定')+(S.streak&&S.streak.n>=2?(' ｜ '+(S.streak.t==='W'?'🔥 '+S.streak.n+'連勝中！':'❄ '+S.streak.n+'連敗中…次で止めよう')):'');}
+    else if(S.phase==='cs')hn.innerHTML='🏆 次はクライマックスシリーズ！ 短期決戦を勝ち抜いて日本シリーズへ。';
+    else if(S.phase==='js')hn.innerHTML='👑 次は日本シリーズ！ 勝てば日本一だ。';
+    else if(S.phase==='draft')hn.innerHTML='🌱 ドラフト会議が待っている。新戦力を迎えよう。';
+    else hn.innerHTML='📅 オフシーズン処理を進めると来季が始まる。';
+  }catch(e){hn.textContent='';}}
   if(S._fireworks){S._fireworks=false;S._fireworksSpin=true;setTimeout(launchFireworks,500);setTimeout(()=>{S._fireworksSpin=false;},9000);} // 勝利の花火（PayPayドーム名物）
 }
 let curPanelTitle='';
@@ -1059,7 +1068,7 @@ function radarSvg(p){ // 能力レーダーチャート（4軸ダイヤモンド
   const shape='<polygon points="'+st.map((s,i)=>pt(i,s[1])).join(' ')+'" fill="rgba(255,217,77,.34)" stroke="#ffd94d" stroke-width="1.6"/>';
   const dots=st.map((s,i)=>{const a=Math.PI/2*i-Math.PI/2,r=R*clamp(s[1],0,100)/100;return '<circle cx="'+(cx+Math.cos(a)*r).toFixed(1)+'" cy="'+(cy+Math.sin(a)*r).toFixed(1)+'" r="2.2" fill="#ffd94d"/>';}).join('');
   const lbs=st.map((s,i)=>{const a=Math.PI/2*i-Math.PI/2,lx=cx+Math.cos(a)*(R+8),ly=cy+Math.sin(a)*(R+8);return '<text x="'+lx.toFixed(1)+'" y="'+(ly+3).toFixed(1)+'" font-size="8.5" fill="#cfe2f7" text-anchor="middle" font-weight="700">'+s[0]+'</text>';}).join('');
-  return '<div class="radar-box"><svg width="86" height="86" viewBox="0 0 86 86">'+grid+shape+dots+lbs+'</svg><div class="radar-cap">能力チャート</div></div>';
+  return '<div class="radar-box"><svg width="86" height="86" viewBox="-7 -7 100 100">'+grid+shape+dots+lbs+'</svg><div class="radar-cap">能力チャート</div></div>'; // viewBoxに余白を持たせ、上下左右の軸ラベル（半径41+文字幅）が端で切れないようにする
 }
 function statBarsHtml(p){ // 能力値をバー表示（.statbar 活用）
   const bar=(lb,v)=>lb+' <span class="statbar"><i style="width:'+clamp(v,0,100)+'%"></i></span> '+v;
@@ -1550,7 +1559,7 @@ function beginMatch(inn){
   say('実況：'+M.label+'、'+M.opp.name+'戦、プレイボール！ 先発は'+M.starter.name+'！');
   updateSB();later(nextPA,800);
 }
-function say(html){$('commentary').innerHTML=html;}
+function say(html){const c=$('commentary');c.innerHTML=html;c.scrollTop=c.scrollHeight;} // 実況が溜まったら最新行が見えるよう末尾へ自動スクロール
 function updateSB(){
   if(!M)return;
   $('sb-teams').innerHTML='<div class="sb-row"><i class="sb-chip cpu"></i><span class="sb-name">'+M.opp.short+'</span><span class="sb-score">'+M.score.cpu+'</span></div><div class="sb-row me-row"><i class="sb-chip me"></i><span class="sb-name">⭐あなた</span><span class="sb-score">'+M.score.me+'</span></div>';
@@ -1633,7 +1642,7 @@ function applyOutcome(side,outcome){
   updateRunners3D();updateSB();
   return runs;
 }
-function sayAdd(t){say($('commentary').innerHTML+'<br>'+t);}
+function sayAdd(t){say($('commentary').innerHTML+'<br>'+t);} // say側で自動スクロールするので追記時も最新行が見える
 function runnerRun(idx,isMe){const id=M.bases[idx];if(id==null||id===true)return 55;const p=isMe?S.players.find(x=>x.id===id):(M.opp?M.opp.batters.find(x=>x.id===id):null);return p?p.run:55;} // 塁上走者本人の走力（E4）
 function outPlayExtras(isMe,deep,outsBefore){ // 凡退時の併殺と犠牲フライ（E2/E17：従来は併殺がデッドコードで一生起きず、犠飛も存在しなかった）
   if(outsBefore>1)return;
@@ -1696,6 +1705,11 @@ function stealInfoHtml(){ // 盗塁可能な場面だけ、リードランナー
   const pc=Math.round(stealProb(runner,spd)*100);
   return '<br>💨 盗塁成功率の目安：約'+pc+'%'+(runner?'（'+runner.name+' 走力'+spd+(runner.skill==='韋駄天'?'・韋駄天+8%':'')+'）':'');
 }
+function ondeckHtml(side){ // 次打者（オンデック）の予告：打者カードに次の打順を出して継投・配球の判断材料にする
+  if(!M)return '';
+  if(side==='me'){if(!M.lineup||M.lineup.length<2)return '';const nx=M.lineup[(M.li+1)%M.lineup.length];return '<br>⏭ 次：'+nx.name+'（ミート'+nx.meet+' パワー'+nx.pow+'）';}
+  if(!M.opp||!M.opp.batters||M.opp.batters.length<2)return '';const nc=M.opp.batters[(M.ci+1)%M.opp.batters.length];return '<br>⏭ 次の打者：'+nc.name+'（ミート'+nc.meet+' パワー'+nc.pow+'）';
+}
 function zoneHtml(t){
   if(!t)return'';
   const left=clamp(50+t.tx*38,4,96), top=clamp((1-(t.ty-0.35)/1.85)*100,4,96);
@@ -1713,7 +1727,7 @@ function nextPA(){
     const bt=curMyBatter();
     showTelop('<img src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'"><div><div class="tt-name">'+((M.li%M.lineup.length)+1)+'番 '+bt.name+'</div><div class="tt-sub">'+bt.pos+'｜ミート'+bt.meet+' パワー'+bt.pow+' 走'+bt.run+(bt.real?'｜'+bt.team:'')+'</div></div>',1650);
     const myToday=M.pa[bt.id];
-    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+'｜守備：'+(M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+(myToday&&myToday.ab?'｜今日：'+myToday.ab+'打数'+myToday.h+'安打':'')+'<br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml();
+    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+'｜守備：'+(M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+(myToday&&myToday.ab?'｜今日：'+myToday.ab+'打数'+myToday.h+'安打':'')+'<br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml()+ondeckHtml('me');
     $('batter-card').classList.remove('hidden');$('pitch-controls').classList.add('hidden');$('bat-controls').classList.remove('hidden');
     $('btn-swing').disabled=true;$('btn-take').disabled=true;$('btn-bunt').disabled=true;
     const gsT=M.gameStats[bt.id]; // 実況は当日の成績と場面で分岐する（E26：0安打の打者に「当たっている」と言わない）
@@ -1727,7 +1741,7 @@ function nextPA(){
     showTelop('<img src="'+drawPortrait(cb)+'"><div><div class="tt-name">'+cb.name+'</div><div class="tt-sub">'+(cb.real?cb.team+'｜':'')+'ミート'+cb.meet+' パワー'+cb.pow+'</div></div>',1200);
     const cbToday=(M.cpuPa&&M.cpuPa[cb.id])?M.cpuPa[cb.id]:null;
     const pg=M.pitGame||{k:0,er:0};
-    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(cb)+'">相手打者：<b>'+cb.name+'</b> '+rankBadge(cb)+(cb.real?'（'+cb.team+'）':'')+'<br>ミート'+cb.meet+' パワー'+cb.pow+'｜相手チーム総合力 '+M.opp.str+(cbToday&&cbToday.ab?'｜今日：'+cbToday.ab+'打数'+cbToday.h+'安打'+(cbToday.hr?'（'+cbToday.hr+'本塁打）':''):'')+'<br>投手：'+M.starter.name+'（球速'+Math.round(118+M.starter.vel*0.42)+'km/h / 球数'+(M.myPitches||0)+'）<br>自軍投手陣 今日：奪三振'+(pg.k+M.pit.k)+'・自責'+(pg.er+M.pit.er)+((M.myPitches||0)>fatigueAt(M.starter)?'<br>🥵 うちの先発も限界近い…継投どきかも':'');
+    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(cb)+'">相手打者：<b>'+cb.name+'</b> '+rankBadge(cb)+(cb.real?'（'+cb.team+'）':'')+'<br>ミート'+cb.meet+' パワー'+cb.pow+'｜相手チーム総合力 '+M.opp.str+(cbToday&&cbToday.ab?'｜今日：'+cbToday.ab+'打数'+cbToday.h+'安打'+(cbToday.hr?'（'+cbToday.hr+'本塁打）':''):'')+'<br>投手：'+M.starter.name+'（球速'+Math.round(118+M.starter.vel*0.42)+'km/h / 球数'+(M.myPitches||0)+'）<br>自軍投手陣 今日：奪三振'+(pg.k+M.pit.k)+'・自責'+(pg.er+M.pit.er)+((M.myPitches||0)>fatigueAt(M.starter)?'<br>🥵 うちの先発も限界近い…継投どきかも':'')+ondeckHtml('cpu');
     $('bat-controls').classList.add('hidden');$('pitch-controls').classList.remove('hidden');
     say('実況：相手打者'+cb.name+'を、'+M.starter.name+'が抑えられるか。');
     aimZone=null; // 打席ごとに狙いはリセット
@@ -1918,7 +1932,7 @@ function startPitch(){
   $('cursor-ring').style.left='50%';$('cursor-ring').style.top='50%';
   $('cursor-zone').classList.remove('hidden');$('cursor-ball').classList.remove('hidden');
   M.pitchLog=M.pitchLog||[];M.pitchLog.push(type.label);if(M.pitchLog.length>6)M.pitchLog.shift(); // 配球履歴（N1）
-  $('pitch-info').innerHTML='⚾ '+M.opp.pitcher.name+'（球数'+M.oppPitches+'）<br>球速表示は打った後！'+(M.pitchLog.length>1?'<br>配球：'+M.pitchLog.slice(0,-1).slice(-4).join(' → '):'')+(M.oppPitches>fatigueAt(M.opp.pitcher)?'<br>🥵 相手投手は疲れている！':'');
+  $('pitch-info').innerHTML='⚾ '+M.opp.pitcher.name+'（球数'+M.oppPitches+'）<br>疲労 <span class="statbar"><i style="width:'+clamp(Math.round(M.oppPitches/Math.max(1,fatigueAt(M.opp.pitcher))*100),0,100)+'%"></i></span> '+(M.oppPitches>fatigueAt(M.opp.pitcher)?'限界超え！':'あと約'+Math.max(0,fatigueAt(M.opp.pitcher)-M.oppPitches)+'球で疲労')+'<br>球速表示は打った後！'+(M.pitchLog.length>1?'<br>配球：'+M.pitchLog.slice(0,-1).slice(-4).join(' → '):'')+(M.oppPitches>fatigueAt(M.opp.pitcher)?'<br>🥵 相手投手は疲れている！':'');
   $('pitch-coming').classList.remove('hidden');
   // 本格投球モーション（フォームは投手ごとに3種、走者がいればセットポジション）
   const tk=M.pitchToken||0;
@@ -2173,7 +2187,7 @@ function pinchHit(){
   refreshBatterMesh();nextPARefreshCard();vib('0,30');
 }
 function nextPARefreshCard(){const bt=curMyBatter();
-  $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+'｜守備：'+(M&&M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+'<br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml();
+  $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+'｜守備：'+(M&&M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+'<br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml()+ondeckHtml('me');
   updateSB(); // 代打交代直後に盗塁ボタンの可否も新しい走者/打順で同期する
 }
 /* --- 守備：投球 --- */
@@ -2510,7 +2524,7 @@ function finishMatch(){
    '<div class="center"><b style="font-size:22px">'+M.opp.short+' '+M.score.cpu+' - '+M.score.me+' あなた</b><br>'+lsHtml+
    'ヒット'+M.teamHits+'本 / 本塁打'+M.teamHr+'本 / 奪三振'+M.teamK+'<br>'+
    ((mvp.p&&mvp.v>0)?'🏅 MVP：'+mvp.p.name+(mvp.pitcher?'（投手）':'')+'（+50コイン）<br>':'')+((phaseMul>1||oppMul>1)?'<span class="small">報酬倍率：'+(phaseMul>1?('短期決戦 ×'+phaseMul+' '):'')+(oppMul>1?('格上ボーナス ×'+oppMul.toFixed(2)):'')+'</span><br>':'')+perfHtml+perfPitch+'<br><button class="btn mini" onclick="shareResult()">📤 結果を共有</button> <button class="btn gold mini" onclick="closeModal();setTimeout(()=>{if(S.phase===\'draft\')openDraft();else startMatch();},60)">⚾ 次の試合へ</button><br>'+
-   '獲得：🪙 '+coinGain+'コイン（🎟 観客収入 +'+gate+' 含む） / 💪 '+tpGain+'TP<br>👥 観客動員 '+(fanDelta>=0?'+':'')+fanDelta+'人（現在 '+fmt(S.fans)+'人）<br>次の試合：<b>'+nextMatchLabel()+'</b>'+seasonNote+nextNote+rivalNote+
+   '獲得：🪙 '+coinGain+'コイン（🎟 観客収入 +'+gate+' 含む） / 💪 '+tpGain+'TP<br>👥 観客動員 '+(fanDelta>=0?'+':'')+fanDelta+'人（現在 '+fmt(S.fans)+'人）<br>次の試合：<b>'+nextMatchLabel()+'</b>'+seasonNote+(S.streak&&S.streak.n>=2?'<br>'+(S.streak.t==='W'?'🔥 '+S.streak.n+'連勝中！ 波に乗っている':'❄ '+S.streak.n+'連敗中…次で止めよう'):'')+nextNote+rivalNote+
    (lvUps.length?'<br>⬆️ '+lvUps.join('<br>⬆️ '):'')+'</div>',
    ()=>{showHome();});
   S.news.unshift(M.label+'：'+M.score.cpu+'-'+M.score.me+'で'+(win?'勝利':draw?'引分':'敗戦')+'。'+(M.teamHr?' 本塁打'+M.teamHr+'本の花火！':''));
@@ -2596,7 +2610,7 @@ function bind(){
   const bSteal=$('btn-steal');if(bSteal)bSteal.onclick=onSteal;
   const bRelief=$('btn-relief');if(bRelief)bRelief.onclick=reliefPitch;
   $('screen-panel').addEventListener('click',e=>{if(e.target===$('screen-panel'))closePanel();});
-  $('btn-speed').onclick=()=>{speedMul=speedMul>=3?1:speedMul+1;$('btn-speed').textContent='速度 '+speedMul+'x';toast('試合スピード '+speedMul+'倍');}; // 1x→2x→3x の3段階
+  $('btn-speed').onclick=()=>{speedMul=speedMul>=3?1:speedMul+1;$('btn-speed').textContent='速度 '+speedMul+'x';if(!S.settings)S.settings={se:1,crowd:1,mute:false};S.settings.speed=speedMul;save();toast('試合スピード '+speedMul+'倍（次回も維持される）');}; // 1x→2x→3x の3段階。設定をセーブに残して再起動後も維持する
   const bCam=$('btn-cam');if(bCam)bCam.onclick=()=>{const modes=[['bat','打撃'],['pitch','投球'],['outfield','外野'],['follow','追従']];const nx=modes[(modes.findIndex(m=>m[0]===camMode)+1)%modes.length];camManualMode=nx[0];camManualUntil=performance.now()+20000;camMode=nx[0];bCam.textContent='📷 '+nx[1];toast('📷 カメラを'+nx[1]+'視点に切替（しばらくキープ）');};
   // ページを離れる/隠れる時に自動セーブ（試合の合間のデータ消失防止）
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save();});
@@ -2628,6 +2642,7 @@ window.addEventListener('load',()=>{
   load();ensureMissions();bind();preloadExtModels();initGL();S._night=false;buildStadium();showHome();
   try{if(window.NativeApp)NativeApp.scheduleDaily(9,0,'ドリームペナント3D','デイリーミッションが更新されたよ！ 今日の試合が待ってる');}catch(e){}
   if(S.settings&&S.settings.mute)$('btn-mute').textContent='🔇';
+  if(S.settings&&S.settings.speed>=1&&S.settings.speed<=3){speedMul=S.settings.speed;$('btn-speed').textContent='速度 '+speedMul+'x';} // 前回選んだ試合スピードを復元
   setInterval(()=>{refreshHUD();},5000);
   setInterval(()=>{save();},20000);
 });
