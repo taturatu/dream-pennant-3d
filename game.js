@@ -355,7 +355,7 @@ function load(){
     if(!S||typeof S!=='object')throw new Error('bad save');
     if(!Array.isArray(S.players)||!S.players.length)S.players=newSave().players;
     S.players.forEach(p=>{if(!p.ss)p.ss={ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0};
-      ['ab','h','hr','rbi','sb','ip','k','er','w'].forEach(k=>{if(!(p.ss[k]>=0))p.ss[k]=0;});
+      ['ab','h','hr','rbi','sb','ip','k','er','w','g','l','sv','sbf'].forEach(k=>{if(!(p.ss[k]>=0))p.ss[k]=0;}); // 出場/敗戦/セーブ/盗塁死も旧セーブで欠けていたら0で補う（従来は w までしか修復されず、表示側の ||0 頼みだった）
       if(p.lv==null||!(p.lv>=1))p.lv=1;if(p.exp==null||!(p.exp>=0))p.exp=0;
       // 年齢・調子・故障・能力値の欠損/NaNを補完（欠けたままだと年越し処理で年齢がNaN化し引退判定が壊れる）
       if(!(p.age>=15&&p.age<=60))p.age=25;
@@ -993,7 +993,7 @@ function nextMatchLabel(){
 function refreshHUD(){
   ensureMissions(); // 日付跨ぎ直後の試合完了でも当日のミッションに進捗が入る（H2：従来は起動時・試合開始時しか更新されなかった）
   $('hud-coins').textContent=fmt(S.coins);$('hud-tp').textContent=fmt(S.tp);$('hud-fans').textContent=fmt(S.fans);
-  $('hud-season').textContent=S.year+'年目　'+(S.phase==='season'?('シーズン第'+S.gameNo+'戦 / 24'):S.phase==='cs'?'クライマックス':S.phase==='js'?'日本シリーズ':'オフシーズン')+'　順位:'+myRank()+'位';
+  $('hud-season').textContent=S.year+'年目　'+(S.phase==='season'?('シーズン第'+S.gameNo+'戦 / 24'):S.phase==='cs'?'クライマックス':S.phase==='js'?'日本シリーズ':S.phase==='draft'?'ドラフト会議':'オフシーズン')+'　順位:'+myRank()+'位';
   $('hud-team').textContent='⚾ ドリームスターズ（'+S.year+'年目）';
   $('home-record-line').textContent='通算 '+S.career.wins+'勝'+S.career.losses+'敗 / リーグ優勝 '+S.career.titles+'回 / 日本一 '+S.career.japan+'回 / 球場Lv'+S.stadiumLv+' '+STADIUM_NAMES[S.stadiumLv-1]+' / 殿堂 '+S.hof.length+'人';
   const stadSub=$('stadium-sub');if(stadSub)stadSub.textContent='Lv'+S.stadiumLv+' '+STADIUM_NAMES[S.stadiumLv-1];
@@ -1010,6 +1010,7 @@ function refreshHUD(){
   }
 }
 function showHome(){
+  S._night=false; // ホーム（球場を眺める拠点）は昼に戻す。従来はナイター試合の後にホームまで夜景のまま残っていた
   $('hud-season').style.visibility='visible';
   $('screen-game').classList.add('hidden');$('screen-panel').classList.add('hidden');$('screen-home').classList.remove('hidden');
   setCam('hub');buildStadium();refreshHUD();
@@ -1017,8 +1018,8 @@ function showHome(){
   if(hn){try{
     if(S.phase==='season'){const oi=nextOppInfo();const od=oi.oppDef;const opp=oi.opp;const ms=myStarter();
       hn.innerHTML='🔍 次戦プレビュー：<b>'+od.name+'</b>（総合力 '+opp.str+'） 先発 '+opp.pitcher.name+'（球速目安 約'+Math.round(118+opp.pitcher.vel*0.42)+'km/h） ｜ 自軍先発予定 '+(ms?('<b>'+ms.name+'</b>（投手総合'+pitOverall(ms)+'）'):'未定')+(S.streak&&S.streak.n>=2?(' ｜ '+(S.streak.t==='W'?'🔥 '+S.streak.n+'連勝中！':'❄ '+S.streak.n+'連敗中…次で止めよう')):'');}
-    else if(S.phase==='cs')hn.innerHTML='🏆 次はクライマックスシリーズ！ 短期決戦を勝ち抜いて日本シリーズへ。';
-    else if(S.phase==='js')hn.innerHTML='👑 次は日本シリーズ！ 勝てば日本一だ。';
+    else if(S.phase==='cs'||S.phase==='js'){const oi=nextOppInfo();const od=oi.oppDef;const opp=oi.opp;const ms=myStarter();
+      hn.innerHTML=(S.phase==='cs'?'🏆 クライマックス・ファイナル':'👑 日本シリーズ')+'：<b>'+od.name+'</b>（総合力 '+opp.str+'） 先発 '+opp.pitcher.name+'（球速目安 約'+Math.round(118+opp.pitcher.vel*0.42)+'km/h） ｜ 自軍先発予定 '+(ms?('<b>'+ms.name+'</b>（投手総合'+pitOverall(ms)+'）'):'未定');} // 短期決戦でも実際の対戦相手と先発を出す（従来は一般文だけで、誰と当たるかホームでは分からなかった。生成は nextOppInfo のキャッシュで実試合と同一）
     else if(S.phase==='draft')hn.innerHTML='🌱 ドラフト会議が待っている。新戦力を迎えよう。';
     else hn.innerHTML='📅 オフシーズン処理を進めると来季が始まる。';
   }catch(e){hn.textContent='';}}
@@ -1149,7 +1150,7 @@ function doTrade(){
   if(S.tradeYear===S.year){toast('トレードは年1回まで');return;}
   const bench=S.players.filter(pl=>pl.kind==='B'&&!pl.real&&pl.name!=='小林 タツ').sort((a,b)=>overall(a)-overall(b))[0]; // 実在選手と主人公は放出しない
   const owned=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name+'|'+pl.team));
-  const pool=REAL_PLAYERS.filter(r=>r.pos!=='投手'&&!owned.has(r.name+'|'+r.team)); // 重複判定は名前+球団（同名の別選手を巻き込まない）
+  const pool=REAL_PLAYERS.filter(r=>!owned.has(r.name+'|'+r.team)&&(r.pos==='投手'?S.players.filter(x=>x.kind==='P').length<16:S.players.filter(x=>x.kind==='B').length<32)); // 確認モーダルの候補数も実行時（execTrade）と同一条件にする（従来は野手だけで数えていて、投手含む実行プールより少なく表示されていた）。重複判定は名前+球団
   if(!bench||!pool.length){toast('トレード相手が見つからない');return;}
   // 確認はキャンプと同じ自作モーダルに統一する（H16：OS依存の confirm() を混在させない）
   modal('🔁 トレード確認','<div class="center"><b>'+bench.name+'</b>（'+bench.pos+'・総合'+overall(bench)+'）を放出して、実在選手を獲得する？<br><span class="small">獲得条件：まだ加入していない実在選手（投手含む）からランダムで1名（候補 '+pool.length+' 名）。トレードは年1回まで。</span></div>',null,'やめておく');
@@ -1190,7 +1191,7 @@ function rosterExtra(p){ // 選手一覧のカード用ボタン（特訓＋戦�
 function releasePlayer(pid){ // 選手リリース（D1）：枠を空ける手段。主人公と実在選手は対象外
   const p=S.players.find(x=>x.id===pid);if(!p)return;
   if(p.name==='小林 タツ'){toast('主人公は放出できない');return;}
-  if(p.real){toast('実在選手は放出できない（トレードは年1回・野手のみ）');return;}
+  if(p.real){toast('実在選手は放出できない（トレードは年1回・放出は自軍の控え野手のみ、獲得は投手も対象）');return;}
   const sameKind=S.players.filter(x=>x.kind===p.kind).length;
   if(sameKind<=1){toast('その種別は最後の1人なので放出できない');return;}
   modal('📋 戦力外の確認','<div class="center">'+p.name+'（'+p.pos+'・総合'+overall(p)+'）を戦力外にする？<br>この操作は取り消せない。登録枠が1つ空く。<br><br><button class="btn ng" onclick="doRelease('+p.id+')">戦力外にする</button></div>',null,'やめておく'); // ネイティブconfirmでなくゲーム内モーダルで確認（H15の統一。WebView/テスト環境でも止まらない）
@@ -1343,7 +1344,7 @@ function doRealScout(){
   // 登録枠（打者32人・投手16人）を通常スカウトと同じく尊重する：満杯の種別は抽選対象から外す
   const roomB=S.players.filter(x=>x.kind==='B').length<32, roomP=S.players.filter(x=>x.kind==='P').length<16;
   const pool=REAL_PLAYERS.filter(r=>!owned.has(r.name+'|'+r.team)&&(r.pos==='投手'?roomP:roomB));
-  if(!pool.length){toast(owned.size>=REAL_PLAYERS.length?'実在選手は全員加入済み！ すごいコレクションだ':'登録枠がいっぱいで加入できない（打者32人・投手16人まで）。トレードで枠を空けよう');return;}
+  if(!pool.length){toast(owned.size>=REAL_PLAYERS.length?'実在選手は全員加入済み！ すごいコレクションだ':'登録枠がいっぱいで加入できない（打者32人・投手16人まで）。選手・育成の「戦力外」で枠を空けよう');return;}
   S.coins-=800;missionAdd('scout',1);sfx('gacha');flash();
   const r=pick(pool);const p=realToPlayer(r);S.players.push(p);removeFromRace(p);
   banner('🌟 実在選手加入！\n'+p.name);sfx('hr');
@@ -1393,8 +1394,9 @@ function renderRecords(){
   // 通算ランキング（D2）：選手の career から算出する。在籍選手のみ（引退者は殿堂ノートに残る）
   const cTop=(arr,key,fmtF)=>arr.filter(p=>p.career&&(p.career[key]||0)>0).sort((a,b)=>(b.career[key]||0)-(a.career[key]||0)).slice(0,3).map((p,i)=>'<div class="card">'+(i+1)+'位 <b>'+p.name+'</b> '+fmtF(p)+'</div>').join('');
   const cHr=cTop(bs,'hr',p=>p.career.hr+'本（通算'+p.career.seasons+'シーズン）'),cK=cTop(ps,'k',p=>p.career.k+'奪三振（通算'+p.career.seasons+'シーズン）');
+  const cH=cTop(bs,'h',p=>p.career.h+'安打（通算'+p.career.seasons+'シーズン）'),cRbi=cTop(bs,'rbi',p=>p.career.rbi+'打点（通算'+p.career.seasons+'シーズン）'); // 通算安打・打点も career に積算されているのに従来はランキングに出ていなかった
   const cW=cTop(ps,'w',p=>p.career.w+'勝'+(p.career.l?' '+p.career.l+'敗':'')+'（通算'+p.career.seasons+'シーズン）'),cSv=cTop(ps,'sv',p=>p.career.sv+'セーブ（通算'+p.career.seasons+'シーズン）');
-  const careerLeaders=(cHr||cK||cW||cSv)?'<h3>👑 通算ランキング（在籍選手）</h3>'+(cHr?'<p class="small" style="margin-top:6px">通算本塁打</p>'+cHr:'')+(cK?'<p class="small" style="margin-top:6px">通算奪三振</p>'+cK:'')+(cW?'<p class="small" style="margin-top:6px">通算勝利</p>'+cW:'')+(cSv?'<p class="small" style="margin-top:6px">通算セーブ</p>'+cSv:''):'';
+  const careerLeaders=(cHr||cK||cW||cSv||cH||cRbi)?'<h3>👑 通算ランキング（在籍選手）</h3>'+(cH?'<p class="small" style="margin-top:6px">通算安打</p>'+cH:'')+(cHr?'<p class="small" style="margin-top:6px">通算本塁打</p>'+cHr:'')+(cRbi?'<p class="small" style="margin-top:6px">通算打点</p>'+cRbi:'')+(cK?'<p class="small" style="margin-top:6px">通算奪三振</p>'+cK:'')+(cW?'<p class="small" style="margin-top:6px">通算勝利</p>'+cW:'')+(cSv?'<p class="small" style="margin-top:6px">通算セーブ</p>'+cSv:''):'';
   const games=S.career.wins+S.career.losses+S.career.draws,winPct=(S.career.wins+S.career.losses)?(S.career.wins/(S.career.wins+S.career.losses)).toFixed(3):'---'; // 通算試合数と勝率（H8）
   const ach=ACHS.map(a=>{const got=S.ach.includes(a.id);const pr=ACH_PROG[a.id];return '<div class="card">'+(got?'✅':'🔒')+' <b>'+a.label+'</b> <span class="small">報酬'+a.reward+'コイン</span>'+(!got&&pr?' <span class="small">進捗 '+Math.min(pr[0](),pr[1])+' / '+pr[1]+'</span>':'')+'</div>';}).join('');
   const hof=S.hof.length? S.hof.map(h=>'<div class="card"><img class="portrait-s" src="'+drawPortrait({name:h.name,team:'スターズ',pos:'',kind:'B',meet:50,pow:50,run:50,def:50,vel:50,ctl:50,brk:50,sta:50})+'">👑 <b>'+h.name+'</b> <span class="small">'+h.year+'年に殿堂入り / '+h.note+'</span></div>').join(''):'<p class="small">まだ殿堂入り選手はいない。長く活躍した選手が引退すると殿堂入りする。</p>';
@@ -2201,6 +2203,7 @@ function pinchHit(){
   if(!bench){toast('使える代打がいない');return;}
   if(bench.meet+bench.pow<=cur.meet+cur.pow+4){toast('代打より現打者が上だ（温存）');return;}
   const idx=M.lineup.indexOf(cur);M.lineup[idx]=bench;M.pinchUsed=true;
+  if(M.fieldAssign&&M.fieldAssign[cur.id]){M.fieldAssign[bench.id]=M.fieldAssign[cur.id];delete M.fieldAssign[cur.id];} // 代打も代走と同じく守備位置を引き継ぐ（従来は引き継がず、打者カードの守備表示が代打自身の本職に戻って実態とずれていた）
   toast('代打！ '+bench.name+' が打席へ');say('実況：ここで代打、'+bench.name+'！ 勝負に出た！');
   refreshBatterMesh();nextPARefreshCard();vib('0,30');
 }
@@ -2447,6 +2450,9 @@ function simGame(){
       if(checkGameEnd())break;}
     if(checkGameEnd())break;
   }
+  if(!M.finished){ // CS/JSのタイブレークは同点のまま終わらないため、ガード(400打席)を超える長期戦では未終了のまま画面が止まっていた。通常プレーへ戻して続行する
+    updateRunners3D();buildStadium();updateSB();say('実況：決着がつかない長期戦！ ここからは通常プレーで決着をつけよう。スコア '+M.score.cpu+' - '+M.score.me);
+    M.busy=false;later(nextPA,500);}
 }
 
 /* --- 試合終了・シーズン進行 --- */
@@ -2538,7 +2544,7 @@ function finishMatch(){
   else if(M.phase==='cs'){if(win){S.phase='js';nextNote='<br>🏆 クライマックス突破！ 次は日本シリーズ！';}else nextNote=offseasonStart();}
   else if(M.phase==='js'){if(win){S.career.japan++;S.champYear.push(S.year);nextNote='<br>👑👑 日本一！！ 球団史に刻まれた！';}else nextNote='<br>日本シリーズ敗退…あと一歩だった。';nextNote+=offseasonStart();}
   save();
-  const lsCols=Math.max(M.maxInn,M.lines.me.length,M.lines.cpu.length); // 回別ラインスコア（結果モーダル用）
+  const lsCols=Math.max(M.maxInn,M.inning,M.lines.me.length,M.lines.cpu.length); // 回別ラインスコア（結果モーダル用）。延長戦では消化した回まで列を出す（従来は得点した回までの長さで決まり、無得点の延長回が列ごと消えていた）
   const playedCpu=M.inning,playedMe=M.half==='bottom'?M.inning:M.inning-1; // 消化した回は無得点でも「0」（未消化の回だけ「·」）
   const lsHtml='<span class="small">'+M.opp.short+'：'+Array.from({length:lsCols},(_,i)=>M.lines.cpu[i]==null?(i<playedCpu?0:'·'):M.lines.cpu[i]).join(' ')+' ＝ '+M.score.cpu+'<br>あなた：'+Array.from({length:lsCols},(_,i)=>M.lines.me[i]==null?(i<playedMe?0:'·'):M.lines.me[i]).join(' ')+' ＝ '+M.score.me+'</span><br>';
   modal(win?'🎉 勝利！':draw?'△ 引き分け':'● 敗戦…',
