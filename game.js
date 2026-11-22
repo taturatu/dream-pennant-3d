@@ -392,6 +392,7 @@ function load(){
     // 写真キーの id 化（D5）：在籍選手の名前キー写真を id キーへ移し、名前キーは殿堂表示用に残さない（同名新人への引き継ぎ防止）
     S.players.forEach(p=>{if(p.id!=null&&S.photos[p.name]&&!S.photos['id'+p.id]){S.photos['id'+p.id]=S.photos[p.name];delete S.photos[p.name];}});
     if(!S.settings)S.settings={se:1,crowd:1,mute:false};if(S.scoutPity==null)S.scoutPity=0;
+    if(S.streak!=null&&(!S.streak||typeof S.streak!=='object'||!['W','L'].includes(S.streak.t)||!(S.streak.n>=1)||!isFinite(S.streak.n)))S.streak=null; // 連勝/連敗の形が壊れている旧セーブは捨てる（残すと試合終了時の n+1 が NaN 化して二度と直らなかった）
     if(!(S.settings.se>=0&&S.settings.se<=1))S.settings.se=1;if(!(S.settings.crowd>=0&&S.settings.crowd<=1))S.settings.crowd=1;
     if(!S.v2){ // v2移行：順位表のチーム名を実在チームへ差し替え（勝敗は引き継ぐ）
       if(S.standings)CPU_TEAMS.forEach((t,i)=>{if(S.standings[i+1])S.standings[i+1].name=t.name;});
@@ -978,7 +979,7 @@ function initGL(){
 const STADIUM_NAMES=['草野球場','町営球場','みずほPayPayドーム（仮）','みずほPayPayドーム（屋根つき）','みずほPayPayドーム','みずほPayPayドーム（HC付き）','みずほPayPayドーム（満員仕様）','みずほPayPayドーム（完全体）','みずほPayPayドーム（聖地）','みずほPayPayドーム（伝説）'];
 function stadiumCost(lv){return lv*lv*260+lv*300;}
 function idleRatePerMin(){return S.stadiumLv*3+Math.floor(S.fans/600)+S.players.filter(p=>p.rarity==='SSR'||p.rarity==='LEGEND').length*2;}
-function idleAmount(){const mins=(Date.now()-S.lastIdle)/60000;return Math.floor(Math.min(mins,480)*idleRatePerMin());}
+function idleAmount(){const mins=clamp((Date.now()-S.lastIdle)/60000,0,480);return Math.floor(mins*idleRatePerMin());} // 端末の時計が巻き戻る等で lastIdle が未来になると放置収入がマイナス表示になっていたため、下限0でもクランプする
 function myRank(){
   const arr=S.standings.map((t,i)=>({i,w:t.w,l:t.l,d:t.d,rate:t.w+t.l? t.w/(t.w+t.l):0})).sort((a,b)=>b.rate-a.rate||b.w-a.w);
   return arr.findIndex(x=>x.i===0)+1;
@@ -1407,9 +1408,17 @@ function renderRecords(){
 function renderMissions(){
   ensureMissions();
   const h=S.missions.list.map((m,i)=>'<div class="card'+(!m.claimed&&m.prog>=m.target?' mission-ready':'')+'"><b>'+m.label+'</b> （'+m.prog+'/'+m.target+'） <span class="statbar"><i style="width:'+clamp(Math.round(m.prog/m.target*100),0,100)+'%"></i></span> <span class="small">報酬'+m.reward+'コイン</span> '+(m.claimed?'✅ 受取済':(m.prog>=m.target?'<button class="btn mini gold" onclick="claimMission('+i+')">受け取る</button>':'進行中'))+'</div>').join(''); // 受取可能なミッションはカード自体も金色に光らせて見落としを防ぐ
-  openPanel('🎯 今日のミッション',h+(S.missions.list.every(m=>m.claimed)?'<p>🎉 今日のミッションは全て完了！ お疲れさま。明日0時に新しいミッションが届くよ。</p>':'')+'<p class="small">ミッションは毎日0時に新しくなる。</p>');
+  const claimable=S.missions.list.filter(m=>!m.claimed&&m.prog>=m.target).length;
+  openPanel('🎯 今日のミッション',h+(claimable>=2?'<div class="flexrow" style="margin:4px 0 8px"><button class="btn gold" onclick="claimAllMissions()">🎁 受取可能な報酬をまとめて受け取る（'+claimable+'件）</button></div>':'')+(S.missions.list.every(m=>m.claimed)?'<p>🎉 今日のミッションは全て完了！ お疲れさま。明日0時に新しいミッションが届くよ。</p>':'')+'<p class="small">ミッションは毎日0時に新しくなる。</p>');
 }
 function claimMission(i){const m=S.missions.list[i];if(!m||m.claimed||m.prog<m.target)return;m.claimed=true;S.coins+=m.reward;sfx('coin');save();renderMissions();refreshHUD();toast('報酬 '+m.reward+'コイン ゲット！');}
+function claimAllMissions(){ // 受取可能なミッション報酬をまとめて受け取る（従来は1件ずつ押すたびに再描画され、複数件あると手間だった）
+  if(!S.missions||!Array.isArray(S.missions.list))return;
+  const ready=S.missions.list.filter(m=>!m.claimed&&m.prog>=m.target);
+  if(!ready.length){toast('受け取れる報酬はまだない');return;}
+  const total=ready.reduce((s,m)=>s+m.reward,0);ready.forEach(m=>{m.claimed=true;});
+  S.coins+=total;sfx('coin');save();renderMissions();refreshHUD();toast('🎁 ミッション報酬 '+ready.length+'件 合計 '+total+'コイン ゲット！');
+}
 /* --- ヘルプ --- */
 function setVol(k,v){if(!S.settings)S.settings={se:1,crowd:1,mute:false};S.settings[k]=parseFloat(v);if(k==='crowd'&&typeof crowdNodes!=='undefined'&&crowdNodes)crowdNodes.gain.gain.value=0.013*crowdMul();save();toast('音量を調整した');} // 観客スライダーは試合中のループ音にも即時反映する（ミュートボタンだけ直っていた残り）
 function exportSave(){ // セーブの書き出し（H17：端末交換で一生分のセーブが消えるのを防ぐ）
@@ -1425,11 +1434,16 @@ function importSave(){ // セーブの復元（H17）
     localStorage.setItem(SAVE_KEY,raw);toast('📥 セーブを復元した！ 再読み込みする');setTimeout(()=>location.reload(),600);}
   catch(e){toast('⚠ そのデータは読み込めなかった（形式が違うかも）');}
 }
+function confirmResetSave(){ // データ初期化の確認もゲーム内モーダルに統一する（ネイティブconfirmは使わない）
+  modal('⚠ データ初期化の確認','<div class="center">セーブデータを消して、最初からやり直す？<br>この操作は取り消せない。<br><br><button class="btn danger" onclick="doResetSave()">消して最初から</button></div>',null,'やめておく');
+}
+function doResetSave(){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(SAVE_KEY+'_bak');location.reload();} // バックアップ側も消す（残すと復旧と紛らわしい）
 function renderHelp(){
   openPanel('？ 遊び方','<p><b>攻撃：</b>投手が投げたら、ボールがホームに届く瞬間に「スイング！」をタップ。ジャストだと強い打球。早いとレフト方向、遅いとライト方向へ流れる。見送ればボール/ストライク判定。</p>'+
   '<p><b>守備：</b>球種を選んで、メーターが金色ゾーンで止まるように「🎯 リリース！」。完璧な投球ほど三振と弱い打球が増える。先発が疲れたら「🔄 継投」で控え投手に交代できる（1試合2回まで）。</p>'+
   '<p><b>盗塁：</b>攻撃時、走者が一塁/二塁にいて次の塁が空いている時に「💨 盗塁」。成功率は走者の走力で決まる。失敗すると走者がアウトになる。</p>'+
-  '<p><b>作戦ボタン：</b>守備時の「敬遠」は強打者との勝負を避けて塁を埋める（次の打席まで再使用できない）。攻撃時の「代走」は俊足の控えを走者に入れる（1試合1回まで）。盗塁は投球と投球の間に、1球につき1回だけ試せる。</p>'+
+  '<p><b>作戦ボタン：</b>守備時の「敬遠」は強打者との勝負を避けて塁を埋める（次の打席まで再使用できない）。攻撃時の「代走」は俊足の控えを走者に入れる（1試合1回まで）。「代打」は控えの強打者を打席へ送る（1試合1回まで、現打者より十分に強い控えがいる時だけ起用できる）。盗塁は投球と投球の間に、1球につき1回だけ試せる。</p>'+
+  '<p><b>延長・タイブレークと時短：</b>規定回で同点なら延長に入り、延長は無死二塁のタイブレークで始まる（クライマックス／日本シリーズは決着がつくまで続く）。「⏩ この回をシミュ」「⏭️ 試合終了までシミュ」で経過を飛ばせる。速度ボタンで演出を1〜3倍に切り替え、📷視点切替でカメラを変えられる。</p>'+
   '<p><b>スカウト10連：</b>2700コインで10回まとめて引ける（1回分お得）。天井カウントも10回分進む。</p>'+
   '<p><b>育成・スカウト編：</b>特訓は通常（3TPで1能力+2〜4）のほか、セット特訓（5TP・2能力）、総合特訓（8TP・全能力+1）、覚醒特訓（5TP・成功率65%で大きく上昇）がある。チーム特訓は15TPで全員のランダムな能力+1。キャンプは年1回・500コインで若手3名を強化、トレードも年1回まで。スカウトは30回でSSR以上確定（天井）。登録枠は打者32人・投手16人で、枠満杯の選手はTP+5に変換される。引退時に総合72以上かLv7以上の選手は殿堂入りする。戦力外（リリース）は育成画面の選手カードから（実在選手と主人公、各種別最後の1人は不可）。</p>'+
   '<p><b>特技の効果：</b>パワーヒッター＝打球の質+／安打製造機＝当てる確率+／神の目＝見極め+（相手の空振り誘いも効きにくい）／勝負強い＝終盤の接戦で自他ともに強くなる／サヨナラ男＝最終回の同点・1点差で打撃+／ムードメーカー＝打線全体が繋がりやすい／韋駄天＝盗塁成功率+8%／鉄腕＝疲労開始が30球遅い／奪三振王・豪速球＝空振りを奪いやすい／お化けフォーク＝フォークが特に打ちにくい／守備職人＝チームの守備が締まる／二刀流＝投手としても先発・継投に起用される。</p>'+
@@ -1444,7 +1458,7 @@ function renderHelp(){
   '<p><b>アプリ機能：</b>打撃や勝利で本体が振動、結果の共有、毎朝9時の通知リマインダー、写真は端末のピッカーから選択。</p>'+
   '<p>🔊 音量 SE <input type="range" min="0" max="1" step="0.1" value="'+(S.settings?S.settings.se:1)+'" onchange="setVol(\'se\',this.value)"> 観客 <input type="range" min="0" max="1" step="0.1" value="'+(S.settings?S.settings.crowd:1)+'" onchange="setVol(\'crowd\',this.value)"> <span class="small">アプリ版 v'+(window.NativeApp?NativeApp.appVersion():'Web')+'</span></p>'+
   '<p class="small">自作明記：3D球場・選手モデル、試合ロジック、育成/シーズン/ガチャ等のシステムは全て自作コード。ライブラリは Three.js、フォントは M PLUS 系を使用。似顔絵は特徴を寄せた自作イラスト（写真ではない）。</p>'+
-  '<button class="btn mini danger" onclick="if(confirm(\'本当に最初からやり直す？\')){localStorage.removeItem(SAVE_KEY);location.reload();}">データを消して最初から</button>');
+  '<button class="btn mini danger" onclick="confirmResetSave()">データを消して最初から</button>');
 }
 
 /* ============================================================
@@ -1557,6 +1571,11 @@ function startMatch(){
   modalBackSafe=true; // 戻る操作では試合を始めない（A12）
   $('modal-body').innerHTML+='<div class="flexrow" style="justify-content:center;margin-top:6px"><button class="btn" onclick="beginMatch(3)">3回（サクッと）</button><button class="btn gold" onclick="beginMatch(6)">6回（おすすめ）</button><button class="btn" onclick="beginMatch(9)">9回（本格派）</button><button class="btn sub" onclick="cancelMatchStart()">やめる</button></div>';
 }
+function doForfeit(){ // 棄権の実行（確認モーダル内のボタンから）。結果モーダルを出す前に確認モーダルを閉じる
+  if(!M||M.finished)return;
+  $('modal').classList.add('hidden');modalCb=null;modalBackSafe=false;
+  M._forfeited=true;finishMatch();
+}
 function cancelMatchStart(fromBack){ // 試合開始モーダルのキャンセル経路（A12）
   if(!fromBack){$('modal').classList.add('hidden');modalCb=null;modalBackSafe=false;}
   if(M&&!M.begun)M=null;
@@ -1605,7 +1624,8 @@ function updateSB(){
     if(rLeft>0&&M.half==='top'&&!M.finished){const used=new Set((M.starter?[M.starter.id]:[]).concat(M._usedPitchers||[]));const cand=starterPool().filter(p=>!(p.inj>0)&&!used.has(p.id)).sort((a,b)=>pitOverall(b)-pitOverall(a))[0];
       rBtn.textContent='🔄 継投（あと'+rLeft+'回）'+(cand?'：'+cand.name:'');}
     else rBtn.textContent=rLeft>0?'🔄 継投（あと'+rLeft+'回）':'🔄 継投（使用済）';
-    rBtn.disabled=rLeft<=0||!!M.finished;}
+    rBtn.disabled=rLeft<=0||!!M.finished||M.half!=='top';} // 攻撃中は継投できないのでボタン自体も無効化する（従来は押せそうに見えて無反応だった）
+  const ibbB=$('btn-ibb');if(ibbB)ibbB.disabled=!!(M._ibbLock||M.finished); // 敬遠ロック中はボタンも無効表示にする
   const mask=(M.bases[0]?1:0)|(M.bases[1]?2:0)|(M.bases[2]?4:0);
   $('sb-bases').innerHTML='<span class="bs-wrap"><i class="bs-d b2'+(M.bases[1]?' on':'')+'"></i><i class="bs-d b1'+(M.bases[0]?' on':'')+'"></i><i class="bs-d b3'+(M.bases[2]?' on':'')+'"></i></span>'+(mask===0?' 空':mask===7?' 満塁':'');
   if(boardCtx)drawBoard(M.opp.short+' '+M.score.cpu+' - '+M.score.me+' あなた',M.inning+'回'+(M.half==='top'?'表':'裏')+' アウト'+M.outs); // 3Dビジョンにもアウトカウントを表示
@@ -1761,7 +1781,8 @@ function nextPA(){
     showTelop('<img src="'+drawPortrait(cb)+'"><div><div class="tt-name">'+cb.name+'</div><div class="tt-sub">'+(cb.real?cb.team+'｜':'')+'ミート'+cb.meet+' パワー'+cb.pow+'</div></div>',1200);
     const cbToday=(M.cpuPa&&M.cpuPa[cb.id])?M.cpuPa[cb.id]:null;
     const pg=M.pitGame||{k:0,er:0};
-    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(cb)+'">相手打者：<b>'+cb.name+'</b> '+rankBadge(cb)+(cb.real?'（'+cb.team+'）':'')+'<br>ミート'+cb.meet+' パワー'+cb.pow+'｜相手チーム総合力 '+M.opp.str+(cbToday&&cbToday.ab?'｜今日：'+cbToday.ab+'打数'+cbToday.h+'安打'+(cbToday.hr?'（'+cbToday.hr+'本塁打）':''):'')+'<br>投手：'+M.starter.name+'（球速'+Math.round(118+M.starter.vel*0.42)+'km/h / 球数'+(M.myPitches||0)+'）<br>自軍投手陣 今日：奪三振'+(pg.k+M.pit.k)+'・自責'+(pg.er+M.pit.er)+((M.myPitches||0)>fatigueAt(M.starter)?'<br>🥵 うちの先発も限界近い…継投どきかも':'')+ondeckHtml('cpu');
+    const fatAt=Math.max(20,fatigueAt(M.starter)-(M.restFatigue||0)); // 疲労開始球数（休養不足の先発は早まる＝E16と表示を一致させる）
+    $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(cb)+'">相手打者：<b>'+cb.name+'</b> '+rankBadge(cb)+(cb.real?'（'+cb.team+'）':'')+'<br>ミート'+cb.meet+' パワー'+cb.pow+'｜相手チーム総合力 '+M.opp.str+(cbToday&&cbToday.ab?'｜今日：'+cbToday.ab+'打数'+cbToday.h+'安打'+(cbToday.hr?'（'+cbToday.hr+'本塁打）':''):'')+(cb.skill?'<br><span class="rare">特技：'+cb.skill+'</span>':'')+'<br>投手：'+M.starter.name+'（球速'+Math.round(118+M.starter.vel*0.42)+'km/h / 球数'+(M.myPitches||0)+'）<br>疲労 <span class="statbar"><i style="width:'+clamp(Math.round((M.myPitches||0)/fatAt*100),0,100)+'%"></i></span> '+((M.myPitches||0)>fatAt?'限界超え！':'あと約'+Math.max(0,fatAt-(M.myPitches||0))+'球で疲労')+'<br>自軍投手陣 今日：奪三振'+(pg.k+M.pit.k)+'・自責'+(pg.er+M.pit.er)+((M.myPitches||0)>fatAt?'<br>🥵 うちの先発も限界近い…継投どきかも':'')+ondeckHtml('cpu'); // 相手打者の特技も出す（パワーヒッター等が配球判断に要る。自軍打者カードだけに出ていた非対称の解消）。自軍投手の疲労も、相手投手と同じゲージ形式で早めに分かるようにする（従来は球数テキストだけで、超えてから警告が出るだけだった）
     $('bat-controls').classList.add('hidden');$('pitch-controls').classList.remove('hidden');
     say('実況：相手打者'+cb.name+'を、'+M.starter.name+'が抑えられるか。');
     aimZone=null; // 打席ごとに狙いはリセット
@@ -1934,6 +1955,7 @@ function startPitch(){
   {const bt0=curMyBatter();
    if(M.inning>=M.maxInn-1&&(M.score.cpu-M.score.me)>=0&&(M.score.cpu-M.score.me)<=1&&!M.bases[0]&&(bt0.meet+bt0.pow)>=165&&Math.random()<0.25){
      M.oppPitches=(M.oppPitches||0)+4;say('実況：相手が敬遠！ '+bt0.name+' との勝負を避けた。');toast('🚶 相手が敬遠した');
+     $('pitch-info').innerHTML='相手の作戦：敬遠（'+bt0.name+' を歩かせた）'; // 前球表示が前の打席のまま残らないようにする
      applyOutcome('me','BB');paEnd();return;}}
   const pp=M.opp.pitcher;
   const pool=pitchPoolFor(pp); // 相手も能力で球種が解禁される（自軍と同ルール）
@@ -2112,7 +2134,8 @@ function resolveContact(dz){
      if(outcome==='OUT'){const ob=M.outs;M.outs++;recPA(bt.id,r=>{r.ab++;});outPlayExtras(true,dist>=26,ob);}
      else if(outcome==='ERR'){ // 失策（E18）：安打にはならず、全走者1つ進塁
        recPA(bt.id,r=>{r.ab++;});const b=M.bases;let rr=0;if(b[2])rr=1;M.bases=[bt.id,b[0]||null,b[1]||null];
-       if(rr){M.score.me+=rr;if(M.lines)M.lines.me[M.inning-1]=(M.lines.me[M.inning-1]||0)+rr;sayAdd('🎉 失策の間に1点！ スコア '+M.score.cpu+' - '+M.score.me);}
+       if(rr){const wasAheadE=M.score.me>M.score.cpu;M.score.me+=rr;if(!wasAheadE&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id; // 失策での勝ち越しも勝ち投手判定の対象にする（犠飛経路と揃える。従来はこの経路だけ _leadPid が付かなかった）
+       if(M.lines)M.lines.me[M.inning-1]=(M.lines.me[M.inning-1]||0)+rr;sayAdd('🎉 失策の間に1点！ スコア '+M.score.cpu+' - '+M.score.me);}
        updateRunners3D();}
      else applyOutcome('me',outcome);
      updateSB();
@@ -2167,7 +2190,8 @@ function flushPitcherStats(){
   if(nb>0){M._inheritedLeft=nb;M._inheritedPid=st.id;} // 残した走者の得点は降板投手の自責点にする（E3）
 }
 function reliefPitch(){
-  if(!M||M.finished||M.half!=='top')return;
+  if(!M||M.finished)return;
+  if(M.half!=='top'){toast('継投は守備の時だけだよ');return;} // 無反応で終わらせず理由を出す（ボタン側も攻撃中は無効化済み）
   if(M.ballLive||M.busy||meterActive){toast('投球中は継投できない（投球の合間に押してね）');return;}
   if((M.relieved||0)>=2){toast('継投は1試合2回まで');return;}
   const used=new Set([M.starter.id].concat(M._usedPitchers||[]));
@@ -2213,8 +2237,8 @@ function pinchHit(){
   toast('代打！ '+bench.name+' が打席へ');say('実況：ここで代打、'+bench.name+'！ 勝負に出た！');
   refreshBatterMesh();nextPARefreshCard();vib('0,30');
 }
-function nextPARefreshCard(){const bt=curMyBatter();
-  $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+' <span style="white-space:nowrap">｜守備：'+(M&&M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+'</span><br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml()+ondeckHtml('me');
+function nextPARefreshCard(){const bt=curMyBatter();const myToday=(M&&M.pa)?M.pa[bt.id]:null;
+  $('batter-card').innerHTML='<img class="portrait-s" src="'+drawPortrait(bt.team?bt:Object.assign({},bt,{team:'スターズ'}))+'">打者：<b>'+bt.name+'</b>（'+bt.pos+'） '+rankBadge(bt)+((bt.form>=2)?' 🔥絶好調':(bt.form<=-2)?' ❄絶不調':'')+'<br>ミート'+bt.meet+' パワー'+bt.pow+' Lv'+bt.lv+' <span style="white-space:nowrap">｜守備：'+(M&&M.fieldAssign&&M.fieldAssign[bt.id]?M.fieldAssign[bt.id]:bt.pos)+'</span>'+(myToday&&myToday.ab?'｜今日：'+myToday.ab+'打数'+myToday.h+'安打':'')+'<br>今季：打率 '+avgText(bt)+' 本'+bt.ss.hr+' 打点'+bt.ss.rbi+(bt.skill?'<br><span class="rare">特技：'+bt.skill+'</span>':'')+stealInfoHtml()+ondeckHtml('me'); // 代打・代走後の再描画でも通常の打者カードと同じく「今日の成績」を出す（従来は交代直後だけ消えていた）
   updateSB(); // 代打交代直後に盗塁ボタンの可否も新しい走者/打順で同期する
 }
 /* --- 守備：投球 --- */
@@ -2227,7 +2251,8 @@ function renderAimGrid(){
   g.innerHTML=[0,1,2].map(r=>[0,1,2].map(c=>'<button class="aim-cell'+(aimZone&&aimZone.c===c&&aimZone.r===r?' sel':'')+'" onclick="chooseAim('+c+','+r+')">'+(aimZone&&aimZone.c===c&&aimZone.r===r?'🎯':'・')+'</button>').join('')).join('');
 }
 function doIBB(){ // 敬遠（E11）：強打者を避けて塁を埋める選択肢
-  if(!M||M.finished||M.half!=='top'||M.busy||meterActive)return;
+  if(!M||M.finished||M.half!=='top')return;
+  if(M.busy||meterActive){toast('投球の合間じゃないと敬遠できない（球種を選ぶ前に押してね）');return;} // 球種選択後に押しても無反応だったのを、理由表示に変える
   if(M._ibbLock){toast('敬遠は次の打席まで待ってね');return;} // 打席が切り替わるまでの間に連打されると、次の打者までまとめて歩かせてしまうのを防ぐ（ロックは nextPA で解除）
   M._ibbLock=true;
   M.myPitches=(M.myPitches||0)+4;
@@ -2321,7 +2346,8 @@ function resolveCpuPitch(quality){
   }
   if(quality==='bad'&&M.bases.some(b=>b)&&Math.random()<0.07){ // 暴投（E18）：大きく逸れた球が後ろへ転がる
     let runs=0;const nb=[null,M.bases[0],M.bases[1]];if(M.bases[2])runs=1;M.bases=nb;
-    if(runs){M.score.cpu++;M.pit.er++;M.teamEr=(M.teamEr||0)+1;if(M.lines)M.lines.cpu[M.inning-1]=(M.lines.cpu[M.inning-1]||0)+1;}
+    if(runs){const wasCpuAheadW=M.score.cpu>M.score.me;M.score.cpu++;if(!wasCpuAheadW&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id; // 暴投での勝ち越しも敗戦投手判定の対象にする（従来はこの経路だけ _cpuLeadPid が付かず、最終投手に敗戦が付くことがあった）
+    M.pit.er++;M.teamEr=(M.teamEr||0)+1;if(M.lines)M.lines.cpu[M.inning-1]=(M.lines.cpu[M.inning-1]||0)+1;}
     say('実況：暴投！ 球が大きく逸れて走者が進んだ！'+(runs?' 1点入った…':''));sfx('out');updateRunners3D();updateSB();M.busy=false;renderPitchButtons();return;
   }
   const cb=curCpuBatter(),p=M.starter;
@@ -2414,7 +2440,7 @@ function simOutcomePA(side){
     if(outcome==='K'||outcome==='OUT'){/* outs already? applyOutcomeSim handles hits only */}
   }else{
     if(outcome==='K'){M.pit.k++;M.teamK++;}
-    if(outcome==='K'||outcome==='OUT')M.outs++;
+    if(outcome==='K'||outcome==='OUT'){M.outs++;recCpuPA(btX.id,r=>{r.ab++;});} // シミュでも相手打者の打数を記録する（手動経路は記録していたのに、シミュ経路だけ当日成績の打数が増えず「今日：0打数」と出ていた）
     else applyOutcomeSim('cpu',outcome);
   }
   if(side==='me'&&(outcome==='K'||outcome==='OUT'))M.outs++;
@@ -2518,8 +2544,8 @@ function finishMatch(){
   if(win){sfx('fanfare');vib('0,60,40,60,40,120');}else sfx('out');
   try{if(window.NativeApp)NativeApp.keepAwake(false);}catch(e){}
   popupN('+'+coinGain+' コイン','#ffd94d');
-  // 調子（フォーム）の変動
-  M.lineup.concat(st?[st]:[]).forEach(pl=>{pl.form=clamp((pl.form||0)+ri(-1,1),-2,2);});
+  // 調子（フォーム）の変動（二刀流の先発は打線と投手の両方に同じ選手が入るため、idで重複を除いて1回だけ変動させる。従来は二重に振れて変動幅が倍になっていた）
+  {const seenF=new Set();M.lineup.concat(st?[st]:[]).forEach(pl=>{if(!pl||seenF.has(pl.id))return;seenF.add(pl.id);pl.form=clamp((pl.form||0)+ri(-1,1),-2,2);});}
   // 故障者の回復と新たな故障
   S.players.forEach(pl=>{if(pl.inj>0){pl.inj--;if(pl.inj===0)S.news.unshift('🏃 '+pl.name+' が故障から復帰！');}}); // 復帰も知らせる（N57）
   if(Math.random()<0.05){const cand=M.lineup.filter(pl=>!(pl.inj>0));if(cand.length){const ip=pick(cand);ip.inj=ri(1,3);S.news.unshift('🩹 '+ip.name+' が故障で '+ip.inj+'試合離脱…');toast('🩹 '+ip.name+' が故障…');}}
@@ -2559,7 +2585,7 @@ function finishMatch(){
   const lsHtml='<span class="small">'+M.opp.short+'：'+Array.from({length:lsCols},(_,i)=>M.lines.cpu[i]==null?(i<playedCpu?0:'·'):M.lines.cpu[i]).join(' ')+' ＝ '+M.score.cpu+'<br>あなた：'+Array.from({length:lsCols},(_,i)=>M.lines.me[i]==null?(i<playedMe?0:'·'):M.lines.me[i]).join(' ')+' ＝ '+M.score.me+'</span><br>';
   modal(win?'🎉 勝利！':draw?'△ 引き分け':'● 敗戦…',
    '<div class="center"><b style="font-size:22px">'+M.opp.short+' '+M.score.cpu+' - '+M.score.me+' あなた</b><br>'+lsHtml+
-   'ヒット'+M.teamHits+'本 / 本塁打'+M.teamHr+'本 / 奪三振'+M.teamK+'<br>'+
+   'ヒット'+M.teamHits+'本 / 本塁打'+M.teamHr+'本 / 奪三振'+M.teamK+' / 相手安打'+(M.cpuHits||0)+'本<br>'+
    ((mvp.p&&mvp.v>0)?'🏅 MVP：'+mvp.p.name+(mvp.pitcher?'（投手）':'')+'（+50コイン）<br>':'')+((phaseMul>1||oppMul>1)?'<span class="small">報酬倍率：'+(phaseMul>1?('短期決戦 ×'+phaseMul+' '):'')+(oppMul>1?('格上ボーナス ×'+oppMul.toFixed(2)):'')+'</span><br>':'')+perfHtml+perfPitch+'<br><button class="btn mini" onclick="shareResult()">📤 結果を共有</button> <button class="btn gold mini" onclick="closeModal();setTimeout(()=>{if(S.phase===\'draft\')openDraft();else startMatch();},60)">⚾ 次の試合へ</button><br>'+
    '獲得：🪙 '+coinGain+'コイン（🎟 観客収入 +'+gate+' 含む） / 💪 '+tpGain+'TP<br>👥 観客動員 '+(fanDelta>=0?'+':'')+fanDelta+'人（現在 '+fmt(S.fans)+'人）<br>次の試合：<b>'+nextMatchLabel()+'</b>'+seasonNote+(S.streak&&S.streak.n>=2?'<br>'+(S.streak.t==='W'?'🔥 '+S.streak.n+'連勝中！ 波に乗っている':'❄ '+S.streak.n+'連敗中…次で止めよう'):'')+nextNote+rivalNote+
    (lvUps.length?'<br>⬆️ '+lvUps.join('<br>⬆️ '):'')+'</div>',
@@ -2664,7 +2690,7 @@ function bind(){
   $('btn-swing').onclick=onSwing;$('btn-take').onclick=onTake;$('btn-bunt').onclick=onBunt;
   $('btn-throw').onclick=onThrow;
   $('btn-sim-half').onclick=simHalf;$('btn-sim-game').onclick=simGame;
-  $('btn-quit-game').onclick=()=>{if(!M||M.finished)return;if(confirm('棄権すると敗戦扱いになる。本当にやめる？')){M._forfeited=true;finishMatch();}};
+  $('btn-quit-game').onclick=()=>{if(!M||M.finished)return;modal('棄権の確認','<div class="center">棄権すると、この試合は敗戦扱いになる。本当にやめる？<br><br><button class="btn danger" onclick="doForfeit()">棄権する（敗戦）</button></div>',null,'やめない（試合に戻る）');}; // ネイティブconfirmでなくゲーム内モーダルで確認（H15/H16の統一に合わせる。WebViewでも止まらない）
   $('photo-input').addEventListener('change',onPhotoFile);
   // ミートカーソルのドラッグ操作（プロスピA式）
   const czone=$('cursor-zone');
