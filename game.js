@@ -314,7 +314,7 @@ function genPlayer(kind,rarity,scale){
   const p={id:uidC++,name:pick(SURNAMES)+' '+pick(FIRSTNAMES),age:ri(18,32),kind,rarity,
     meet:g(),pow:g(),run:g(),def:g(),vel:g(),ctl:g(),brk:g(),sta:g(),
     lv:1,exp:0,potential:pick(['S','A','A','B','B','C']),skill:null,
-    ss:{ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0},career:{ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0},retired:false};
+    ss:{ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0},career:{ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0},retired:false};
   if(Math.random()<0.3||rarity==='SSR'||rarity==='LEGEND') p.skill=pick(SKILLS);
   if(rarity==='LEGEND'){p.age=ri(19,26);p.potential='S';}
   p.pos= kind==='P'? '投手' : pick(['捕手','一塁','二塁','三塁','遊撃','左翼','中堅','右翼']);
@@ -354,7 +354,7 @@ function load(){
     // セーブ修復：古い/壊れたセーブでも落ちないよう、欠けた中核フィールドを既定値で補う（キーは dreamPennant3D_v1 のまま）
     if(!S||typeof S!=='object')throw new Error('bad save');
     if(!Array.isArray(S.players)||!S.players.length)S.players=newSave().players;
-    S.players.forEach(p=>{if(!p.ss)p.ss={ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0};
+    S.players.forEach(p=>{if(!p.ss)p.ss={ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0};
       ['ab','h','hr','rbi','sb','ip','k','er','w','g','l','sv','sbf'].forEach(k=>{if(!(p.ss[k]>=0))p.ss[k]=0;}); // 出場/敗戦/セーブ/盗塁死も旧セーブで欠けていたら0で補う（従来は w までしか修復されず、表示側の ||0 頼みだった）
       if(p.lv==null||!(p.lv>=1))p.lv=1;if(p.exp==null||!(p.exp>=0))p.exp=0;
       // 年齢・調子・故障・能力値の欠損/NaNを補完（欠けたままだと年越し処理で年齢がNaN化し引退判定が壊れる）
@@ -363,8 +363,8 @@ function load(){
       if(p.inj==null||isNaN(p.inj)||p.inj<0)p.inj=0;
       ['meet','pow','run','def','vel','ctl','brk','sta'].forEach(k=>{if(!(p[k]>=0))p[k]=50;});
       if(!p.pos)p.pos=p.kind==='P'?'投手':'控え';
-      if(!p.career||typeof p.career!=='object')p.career={ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0}; // 通算成績（旧セーブはゼロから補完）
-      ['ab','h','hr','rbi','sb','ip','k','er','w','l','sv','g','seasons'].forEach(k=>{if(!(p.career[k]>=0))p.career[k]=0;});
+      if(!p.career||typeof p.career!=='object')p.career={ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0}; // 通算成績（旧セーブはゼロから補完）
+      ['ab','h','hr','rbi','sb','sbf','ip','k','er','w','l','sv','g','seasons'].forEach(k=>{if(!(p.career[k]>=0))p.career[k]=0;});
       if(!p.potential)p.potential='B';
       if(!p.kind)p.kind='B';
       if(!p.rarity)p.rarity='N';
@@ -1079,7 +1079,7 @@ function statBarsHtml(p){ // 能力値をバー表示（.statbar 活用）
 function careerText(p){ // 通算成績の1行表示（活動がある時だけ）
   const c=p.career;if(!c||!(c.seasons>0||c.ab>0||c.ip>0))return '';
   if(p.kind==='P')return '<br><span class="small">📚 通算（'+c.seasons+'季）: '+c.w+'勝'+(c.l?' '+c.l+'敗':'')+(c.sv?' '+c.sv+'セーブ':'')+' 投球回'+ipText(c.ip)+' 奪三振'+c.k+' 失点'+c.er+'</span>';
-  return '<br><span class="small">📚 通算（'+c.seasons+'季）: 安打'+c.h+' 本塁打'+c.hr+' 打点'+c.rbi+' 盗塁'+(c.sb||0)+'</span>';
+  return '<br><span class="small">📚 通算（'+c.seasons+'季）: 安打'+c.h+' 本塁打'+c.hr+' 打点'+c.rbi+' 盗塁'+(c.sb||0)+((c.sbf)?'（失敗'+c.sbf+'）':'')+'</span>';
 }
 function playerCard(p,extra){
   const hasPhoto=!!photoOf(p);
@@ -1179,8 +1179,8 @@ function renderRoster(){
   '<div class="flexrow" style="margin:6px 0"><select class="sort-sel" onchange="S._sort=this.value;renderRoster()"><option value="ovr"'+(S._sort==='ovr'?' selected':'')+'>総合順</option><option value="lv"'+(S._sort==='lv'?' selected':'')+'>Lv順</option><option value="age"'+(S._sort==='age'?' selected':'')+'>若い順</option><option value="hr"'+(S._sort==='hr'?' selected':'')+'>本塁打順</option><option value="form"'+(S._sort==='form'?' selected':'')+'>調子順</option><option value="pos"'+(S._sort==='pos'?' selected':'')+'>守備位置順</option></select><button class="btn mini" onclick="doCamp()"'+(S.campYear===S.year||S.coins<500?' disabled':'')+'>🏕 '+(S.campYear===S.year?'キャンプ済（年1回）':'キャンプ(500)')+'</button><button class="btn mini" onclick="doTrade()"'+(S.tradeYear===S.year?' disabled':'')+'>🔁 '+(S.tradeYear===S.year?'トレード済（年1回）':'トレード')+'</button><button class="btn mini" onclick="doTeamTrain()"'+(S.tp<15?' disabled':'')+'>🏃 チーム特訓(15TP)</button></div>'+
   '<div class="flexrow" style="margin:2px 0 8px"><button class="btn mini'+(tab==='all'?' gold':' sub')+'" onclick="S._rosterTab=\'all\';renderRoster()">全員（'+S.players.length+'）</button><button class="btn mini'+(tab==='B'?' gold':' sub')+'" onclick="S._rosterTab=\'B\';renderRoster()">打者（'+S.players.filter(p=>p.kind==='B').length+'/32）</button><button class="btn mini'+(tab==='P'?' gold':' sub')+'" onclick="S._rosterTab=\'P\';renderRoster()">投手（'+S.players.filter(p=>p.kind==='P').length+'/16）</button><select class="sort-sel" onchange="S._rosterFilter=this.value;renderRoster()"><option value="all"'+(filt==='all'?' selected':'')+'>絞り込みなし</option>'+['LEGEND','SSR','SR','R','N'].map(r=>'<option value="'+r+'"'+(filt===r?' selected':'')+'>'+r+'のみ</option>').join('')+'<option value="inj"'+(filt==='inj'?' selected':'')+'>🩹故障中のみ</option><option value="real"'+(filt==='real'?' selected':'')+'>🌟実在選手のみ</option></select></div>'+ // 枠上限の表示（H11）と絞り込み（H13）
   ((filt!=='all'&&!bs.length&&!ps.length)?'<p class="small">条件に合う選手はいない。</p>':'');
-  if(tab!=='P')h+='<h3>打者</h3>'+bs.map(p=>playerCard(p,rosterExtra(p))).join('');
-  if(tab!=='B')h+='<h3>投手</h3>'+ps.map(p=>playerCard(p,rosterExtra(p))).join('');
+  if(tab!=='P'&&(bs.length||filt==='all'))h+='<h3>打者</h3>'+bs.map(p=>playerCard(p,rosterExtra(p))).join(''); // 絞り込みで該当者がいない側は、空の見出しだけが残らないようにする
+  if(tab!=='B'&&(ps.length||filt==='all'))h+='<h3>投手</h3>'+ps.map(p=>playerCard(p,rosterExtra(p))).join('');
   openPanel('👥 選手・育成',h);
 }
 function rosterExtra(p){ // 選手一覧のカード用ボタン（特訓＋戦力外）
@@ -1386,7 +1386,7 @@ function renderRecords(){
    ['盗塁',top(bs.filter(p=>(p.ss.sb||0)>0),p=>p.ss.sb||0,p=>(p.ss.sb||0)+'盗塁')],
    ['奪三振',top(ps.filter(p=>p.ss.k>0),p=>p.ss.k,p=>p.ss.k+'奪三振 / 防御率相当 '+eraText(p))],
    ['勝利',top(ps.filter(p=>(p.ss.w||0)>0),p=>p.ss.w||0,p=>(p.ss.w||0)+'勝'+((p.ss.l)?' '+p.ss.l+'敗':'')+((p.ss.sv)?' '+p.ss.sv+'セーブ':''))], // 投手部門に勝利ランキングも（従来は奪三振だけだった）
-   ['防御率（投球回'+Math.max(1,Math.floor(eraMin/3))+'回以上）',eraHtml],
+   ['防御率（投球回'+ipText(eraMin)+'回以上）',eraHtml], // 規定投球回はアウト数→回換算で正確に（従来は floor で 1アウトでも「1回以上」と表示していた）
   ];
   const leaders='<h3>📊 今季チーム内ランキング</h3>'+
    cats.filter(c=>c[1]).map(c=>'<p class="small" style="margin-top:6px">'+c[0]+'</p>'+c[1]).join('')+
@@ -1396,7 +1396,8 @@ function renderRecords(){
   const cHr=cTop(bs,'hr',p=>p.career.hr+'本（通算'+p.career.seasons+'シーズン）'),cK=cTop(ps,'k',p=>p.career.k+'奪三振（通算'+p.career.seasons+'シーズン）');
   const cH=cTop(bs,'h',p=>p.career.h+'安打（通算'+p.career.seasons+'シーズン）'),cRbi=cTop(bs,'rbi',p=>p.career.rbi+'打点（通算'+p.career.seasons+'シーズン）'); // 通算安打・打点も career に積算されているのに従来はランキングに出ていなかった
   const cW=cTop(ps,'w',p=>p.career.w+'勝'+(p.career.l?' '+p.career.l+'敗':'')+'（通算'+p.career.seasons+'シーズン）'),cSv=cTop(ps,'sv',p=>p.career.sv+'セーブ（通算'+p.career.seasons+'シーズン）');
-  const careerLeaders=(cHr||cK||cW||cSv||cH||cRbi)?'<h3>👑 通算ランキング（在籍選手）</h3>'+(cH?'<p class="small" style="margin-top:6px">通算安打</p>'+cH:'')+(cHr?'<p class="small" style="margin-top:6px">通算本塁打</p>'+cHr:'')+(cRbi?'<p class="small" style="margin-top:6px">通算打点</p>'+cRbi:'')+(cK?'<p class="small" style="margin-top:6px">通算奪三振</p>'+cK:'')+(cW?'<p class="small" style="margin-top:6px">通算勝利</p>'+cW:'')+(cSv?'<p class="small" style="margin-top:6px">通算セーブ</p>'+cSv:''):'';
+  const cSb=cTop(bs,'sb',p=>p.career.sb+'盗塁（通算'+p.career.seasons+'シーズン）'),cG=cTop(ps,'g',p=>p.career.g+'登板（通算'+p.career.seasons+'シーズン）'); // 通算盗塁・通算登板も career に積算されているのに従来はランキングに出ていなかった
+  const careerLeaders=(cHr||cK||cW||cSv||cH||cRbi||cSb||cG)?'<h3>👑 通算ランキング（在籍選手）</h3>'+(cH?'<p class="small" style="margin-top:6px">通算安打</p>'+cH:'')+(cHr?'<p class="small" style="margin-top:6px">通算本塁打</p>'+cHr:'')+(cRbi?'<p class="small" style="margin-top:6px">通算打点</p>'+cRbi:'')+(cSb?'<p class="small" style="margin-top:6px">通算盗塁</p>'+cSb:'')+(cK?'<p class="small" style="margin-top:6px">通算奪三振</p>'+cK:'')+(cW?'<p class="small" style="margin-top:6px">通算勝利</p>'+cW:'')+(cSv?'<p class="small" style="margin-top:6px">通算セーブ</p>'+cSv:'')+(cG?'<p class="small" style="margin-top:6px">通算登板</p>'+cG:''):'';
   const games=S.career.wins+S.career.losses+S.career.draws,winPct=(S.career.wins+S.career.losses)?(S.career.wins/(S.career.wins+S.career.losses)).toFixed(3):'---'; // 通算試合数と勝率（H8）
   const ach=ACHS.map(a=>{const got=S.ach.includes(a.id);const pr=ACH_PROG[a.id];return '<div class="card">'+(got?'✅':'🔒')+' <b>'+a.label+'</b> <span class="small">報酬'+a.reward+'コイン</span>'+(!got&&pr?' <span class="small">進捗 '+Math.min(pr[0](),pr[1])+' / '+pr[1]+'</span>':'')+'</div>';}).join('');
   const hof=S.hof.length? S.hof.map(h=>'<div class="card"><img class="portrait-s" src="'+drawPortrait({name:h.name,team:'スターズ',pos:'',kind:'B',meet:50,pow:50,run:50,def:50,vel:50,ctl:50,brk:50,sta:50})+'">👑 <b>'+h.name+'</b> <span class="small">'+h.year+'年に殿堂入り / '+h.note+'</span></div>').join(''):'<p class="small">まだ殿堂入り選手はいない。長く活躍した選手が引退すると殿堂入りする。</p>';
@@ -1428,6 +1429,7 @@ function renderHelp(){
   openPanel('？ 遊び方','<p><b>攻撃：</b>投手が投げたら、ボールがホームに届く瞬間に「スイング！」をタップ。ジャストだと強い打球。早いとレフト方向、遅いとライト方向へ流れる。見送ればボール/ストライク判定。</p>'+
   '<p><b>守備：</b>球種を選んで、メーターが金色ゾーンで止まるように「🎯 リリース！」。完璧な投球ほど三振と弱い打球が増える。先発が疲れたら「🔄 継投」で控え投手に交代できる（1試合2回まで）。</p>'+
   '<p><b>盗塁：</b>攻撃時、走者が一塁/二塁にいて次の塁が空いている時に「💨 盗塁」。成功率は走者の走力で決まる。失敗すると走者がアウトになる。</p>'+
+  '<p><b>作戦ボタン：</b>守備時の「敬遠」は強打者との勝負を避けて塁を埋める（次の打席まで再使用できない）。攻撃時の「代走」は俊足の控えを走者に入れる（1試合1回まで）。盗塁は投球と投球の間に、1球につき1回だけ試せる。</p>'+
   '<p><b>スカウト10連：</b>2700コインで10回まとめて引ける（1回分お得）。天井カウントも10回分進む。</p>'+
   '<p><b>育成・スカウト編：</b>特訓は通常（3TPで1能力+2〜4）のほか、セット特訓（5TP・2能力）、総合特訓（8TP・全能力+1）、覚醒特訓（5TP・成功率65%で大きく上昇）がある。チーム特訓は15TPで全員のランダムな能力+1。キャンプは年1回・500コインで若手3名を強化、トレードも年1回まで。スカウトは30回でSSR以上確定（天井）。登録枠は打者32人・投手16人で、枠満杯の選手はTP+5に変換される。引退時に総合72以上かLv7以上の選手は殿堂入りする。戦力外（リリース）は育成画面の選手カードから（実在選手と主人公、各種別最後の1人は不可）。</p>'+
   '<p><b>特技の効果：</b>パワーヒッター＝打球の質+／安打製造機＝当てる確率+／神の目＝見極め+（相手の空振り誘いも効きにくい）／勝負強い＝終盤の接戦で自他ともに強くなる／サヨナラ男＝最終回の同点・1点差で打撃+／ムードメーカー＝打線全体が繋がりやすい／韋駄天＝盗塁成功率+8%／鉄腕＝疲労開始が30球遅い／奪三振王・豪速球＝空振りを奪いやすい／お化けフォーク＝フォークが特に打ちにくい／守備職人＝チームの守備が締まる／二刀流＝投手としても先発・継投に起用される。</p>'+
@@ -1489,6 +1491,7 @@ function myStarter(){
   const all=starterPool().sort((a,b)=>pitOverall(b)-pitOverall(a));
   const healthy=all.filter(p=>!(p.inj>0)); // 故障中の投手を先発にしない
   const ps=healthy.length?healthy:all;
+  if(!ps.length){const em=genPlayer('P','R',0);em.name='助っ人 '+em.name;em.temp=true;return em;} // 先発候補が1人もいない異常セーブでも試合開始で落ちないように（打線側の助っ人と同じ考え方。通常のプレイでは到達しない）
   if(S.phase==='cs'||S.phase==='js')return ps[0]; // 短期決戦はローテーションでなくエースが先発する（E15）
   // 休養不足の先発は僅かに不利（E16：前回登板からの間隔が短いと序盤から疲労気味）
   return ps[(S.gameNo-1)%ps.length]||ps[0];
@@ -1511,7 +1514,7 @@ function cpuTeamGen(teamDef,strBonus){
   const fa=assignPositions(batters);
   const str=Math.round(batters.reduce((s,b)=>s+(b.meet+b.pow)/2,0)/9);
   let reliever=null; // 相手の控え投手（E13：相手も継投する）
-  if(rp.length>1){reliever=Object.assign({},rp[(S.gameNo)%rp.length]);if(reliever.real)reliever.skill=REAL_SKILLMAP[reliever.name]||null;['vel','ctl','brk'].forEach(k=>{reliever[k]=clamp(Math.round(reliever[k]+bonus),25,99);});}
+  if(rp.length>1){for(let off=0;off<rp.length;off++){const cand0=rp[(S.gameNo+off)%rp.length];if(cand0.name!==pitcher.name){reliever=Object.assign({},cand0);break;}}if(reliever){if(reliever.real)reliever.skill=REAL_SKILLMAP[reliever.name]||null;['vel','ctl','brk'].forEach(k=>{reliever[k]=clamp(Math.round(reliever[k]+bonus),25,99);});}} // 継投投手は先発と別人を選ぶ（従来のローテーション式だと短期決戦で先発＝継投になることがあった）
   return {name:teamDef.name,short:teamDef.short,color:teamDef.color,batters,pitcher,reliever,str,fieldAssign:fa.assign,defMismatch:fa.mismatch};
 }
 const REAL_SKILLMAP={'大谷翔平':'二刀流','千賀滉大':'お化けフォーク','周東佑京':'韋駄天','スキーンズ':'豪速球','今井達也':'奪三振王','ジャッジ':'パワーヒッター','村上宗隆':'パワーヒッター','近藤健介':'安打製造機','菊池涼介':'守備職人','山本由伸':'勝負強い','佐々木朗希':'豪速球','源田壮亮':'守備職人','近本光司':'韋駄天'};
@@ -1520,7 +1523,7 @@ function realToPlayer(r){
   const p={id:uidC++,name:r.name,team:r.team,age:ri(21,33),kind:r.kind,rarity:ov>=86?'SSR':ov>=78?'SR':'R',
     meet:r.meet,pow:r.pow,run:r.run,def:r.def,vel:r.vel,ctl:r.ctl,brk:r.brk,sta:r.sta,
     lv:1,exp:0,potential:ov>=85?'S':'A',skill:REAL_SKILLMAP[r.name]||(Math.random()<0.3?pick(SKILLS):null),
-    ss:{ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0},career:{ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0},retired:false,real:true,pos:r.pos,no:NUMBERS[r.name]};
+    ss:{ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0},career:{ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0},retired:false,real:true,pos:r.pos,no:NUMBERS[r.name]};
   if(p.name==='大谷翔平'){p.vel=97;p.ctl=84;p.brk=88;p.sta=82;} // 二刀流：投手としての実能力も持つ（公知の目安）
   return p;
 }
@@ -1560,10 +1563,10 @@ function cancelMatchStart(fromBack){ // 試合開始モーダルのキャンセ�
   showHome();
 }
 function beginMatch(inn){
-  if(M.begun)return;
+  if(!M||M.begun)return; // 試合開始モーダルをキャンセル済み（M=null）のまま呼ばれても落ちない（読込待ちの間隔タイマー経由で実際に発生していた）
   if(!EXT.ready&&!EXT.failed&&window.THREE&&THREE.GLTFLoader){ // 外部3Dモデルの読み込み待ち（最大8秒で従来モデルにフォールバック）
     toast('🎨 3Dモデル読み込み中…');const t0=Date.now();
-    const iv=setInterval(()=>{if(EXT.ready||EXT.failed||Date.now()-t0>8000){clearInterval(iv);beginMatch(inn);}},250);return;}
+    const iv=setInterval(()=>{if(!M||M.begun){clearInterval(iv);return;}if(EXT.ready||EXT.failed||Date.now()-t0>8000){clearInterval(iv);beginMatch(inn);}},250);return;}
   M.begun=true;
   try{if(window.NativeApp)NativeApp.keepAwake(true);}catch(e){}
   if(!S.tutoDone){S.tutoDone=true;save();const mRef=M;setTimeout(()=>{if(M===mRef&&!M.finished)toast('📖 守備：球種→メーターを金ゾーンで止めてリリース！',3600);},600);
@@ -1734,7 +1737,7 @@ function zoneHtml(t){
 }
 function nextPA(){
   if(!M||M.finished)return;
-  M.balls=0;M.strikes=0;M.busy=false;M._hrReplay=false;updateSB();resetFielders();refreshBatterMesh();
+  M.balls=0;M.strikes=0;M.busy=false;M._hrReplay=false;M._ibbLock=false;updateSB();resetFielders();refreshBatterMesh();
   if(M.inning===7&&M.half==='bottom'&&M.maxInn>=7&&!M._balloon){M._balloon=true;setTimeout(()=>{releaseBalloons();banner('🎈 ラッキー7！ 黄色いジェット風船！');},600);}
   if(M.inning===5&&M.half==='bottom'&&!M._wave){M._wave=true;setTimeout(crowdWave,400);}
   if(M.inning===M.maxInn&&M.half==='bottom'&&!M._charge){M._charge=true;sfx('charge');}
@@ -1920,7 +1923,8 @@ function pitchPoolFor(pp){ // 投手の能力で解禁される球種プール�
 }
 function startPitch(){
   if(!M||M.finished||M.half!=='bottom')return;
-  M.busy=true;M.swungEarly=false;
+  if(M.busy)return; // 予約済みの開始タイマーが重なっても投球を二重に始めない（ボール演出と判定が二重化する事故防止）
+  M.busy=true;M.swungEarly=false;M._stealLock=false; // 新しい1球が始まったら盗塁ロックを解除する（盗塁は1球に1回まで）
   // 相手の継投（E13）：疲労限界を超えたら控え投手へ交代する（従来は相手先発が何球でも投げ続けた）
   if(!M.opp._relieved&&M.opp.reliever&&(M.oppPitches||0)>fatigueAt(M.opp.pitcher)+30){
     M.opp.pitcher=M.opp.reliever;M.opp._relieved=true;M.oppPitches=0;M._prevCpuPitch=null;
@@ -2128,6 +2132,7 @@ function onSteal(){
   if(!M||M.finished)return;
   if(M.half!=='bottom'){toast('盗塁は攻撃の時だけだよ');return;}
   if(M.ballLive||M.busy){toast('投球中は盗塁できない（次の投球前に押してね）');return;} // 投球モーション中は走らない（状態のねじれ防止）。無反応にせず理由を出す
+  if(M._stealLock){toast('盗塁は1球に1回まで（次の投球を待ってね）');return;} // 投球を挟まずに連続で走らせる（成功→即次の塁へ）のを防ぐ。ロックは startPitch で解除
   // リードランナー：三塁が空いていれば二塁走者、二塁が空いていれば一塁走者が走る
   let from=-1;
   if(M.bases[1]&&!M.bases[2])from=1;else if(M.bases[0]&&!M.bases[1])from=0;
@@ -2136,6 +2141,7 @@ function onSteal(){
   const runner=(typeof rid==='number')?S.players.find(p=>p.id===rid):null;
   const spd=runner?runner.run:55;
   const pSucc=stealProb(runner,spd);
+  M._stealLock=true;
   M.bases[from]=null;
   if(Math.random()<pSucc){
     M.bases[from+1]=rid;if(typeof rid==='number'){(M.steals=M.steals||{});const sr=M.steals[rid]=M.steals[rid]||{sb:0,sbf:0};sr.sb++;} // 盗塁は他の成績と同じく試合終了時に一括反映する（従来は ss へ即書きで、継投時の途中セーブで未完の試合の盗塁だけが残る不整合があった）
@@ -2196,7 +2202,7 @@ function pinchRun(){ // 代走（N7）：俊足の控えを走者に入れ、そ
 function pinchHit(){
   if(!M||M.finished||M.half!=='bottom')return;
   if(M.pinchUsed){toast('代打は1試合1回まで');return;}
-  if(M.ballLive){toast('投球中は代打できない（次の投球前に押してね）');return;}
+  if(M.ballLive||M.busy){toast('投球中は代打できない（次の投球前に押してね）');return;} // 投球モーション中（ボールがまだ手元にある間）も交代させない。従来は ballLive だけ見ていて、モーション途中で打者が入れ替わりカウントと打者がずれることがあった（代走は busy も見ていた非対称の解消）
   const cur=curMyBatter();
   const bench=S.players.filter(pl=>pl.kind==='B'&&!pl.retired&&!(pl.inj>0)&&!M.lineup.includes(pl))
     .sort((a,b)=>(b.meet+b.pow)-(a.meet+a.pow))[0];
@@ -2222,6 +2228,8 @@ function renderAimGrid(){
 }
 function doIBB(){ // 敬遠（E11）：強打者を避けて塁を埋める選択肢
   if(!M||M.finished||M.half!=='top'||M.busy||meterActive)return;
+  if(M._ibbLock){toast('敬遠は次の打席まで待ってね');return;} // 打席が切り替わるまでの間に連打されると、次の打者までまとめて歩かせてしまうのを防ぐ（ロックは nextPA で解除）
+  M._ibbLock=true;
   M.myPitches=(M.myPitches||0)+4;
   say('実況：敬遠！ '+curCpuBatter().name+' との勝負を避けて塁を埋めた。');
   sfx('ui');applyOutcome('cpu','BB');paEnd();
@@ -2425,7 +2433,7 @@ function simHalf(){
   M.pitchToken=(M.pitchToken||0)+1;
   tweens.length=0;M.ballLive=false;ballMesh.visible=false;hidePitchUI();
   const targetHalf=M.half,targetInn=M.inning;let guard=0;
-  if(M.inning>M.maxInn&&M.bases.every(b=>!b)){M.bases=[null,true,null];updateRunners3D();} // シミュでも延長タイブレークの二塁走者を置く（E8）
+  if(M.inning>M.maxInn&&M.bases.every(b=>!b)){M.bases=[null,true,null];M._tbKey=M.inning+'-'+M.half;updateRunners3D();} // シミュでも延長タイブレークの二塁走者を置く（E8）
   while(!M.finished&&M.half===targetHalf&&M.inning===targetInn&&guard++<60){
     M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
     if(M.outs>=3){M.outs=0;M.bases=[null,null,null];
@@ -2444,7 +2452,9 @@ function simGame(){
   tweens.length=0;M.ballLive=false;ballMesh.visible=false;hidePitchUI();
   let guard=0;
   while(!M.finished&&guard++<400){
-    M.balls=0;M.strikes=0;simOutcomePA(M.half==='top'?'cpu':'me');
+    M.balls=0;M.strikes=0;
+    const tbK=M.inning+'-'+M.half;if(M.inning>M.maxInn&&M._tbKey!==tbK){M._tbKey=tbK;if(M.bases.every(b=>!b))M.bases=[null,true,null];} // 試合まるごとシミュでも延長タイブレークの二塁走者を各回表裏に置く（従来は手動と simHalf だけで、simGame の延長は無死無走者から始まっていた）
+    simOutcomePA(M.half==='top'?'cpu':'me');
     if(M.outs>=3){M.outs=0;M.bases=[null,null,null];
       if(M.half==='top'){M.pit.outs+=3-(M._pitCounted||0);M._pitCounted=0;M._inheritedLeft=0;M.half='bottom';}else{M.half='top';M.inning++;}
       if(checkGameEnd())break;}
@@ -2579,9 +2589,9 @@ function offseasonStart(){
     if(p.age<=26){const keys=p.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k=pick(keys);p[k]=clamp(p[k]+ri(0,p.potential==='S'?4:3),20,99);}
     else if(p.age>=33){const keys=p.kind==='P'?['vel','ctl','brk','sta']:['meet','pow','run','def'];const k=pick(keys);p[k]=clamp(p[k]-ri(1,4),20,99);}
     // 通算成績へ今季分を積算してからリセットする（D2）
-    if(!p.career)p.career={ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0};
-    ['ab','h','hr','rbi','sb','ip','k','er','w','l','sv','g'].forEach(k=>{p.career[k]=(p.career[k]||0)+(p.ss[k]||0);});p.career.seasons++; // 敗戦・セーブ・出場試合数も通算へ残す（従来は年越しで消えていた）
-    p.ss={ab:0,h:0,hr:0,rbi:0,sb:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0};
+    if(!p.career)p.career={ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,l:0,sv:0,g:0,seasons:0};
+    ['ab','h','hr','rbi','sb','sbf','ip','k','er','w','l','sv','g'].forEach(k=>{p.career[k]=(p.career[k]||0)+(p.ss[k]||0);});p.career.seasons++; // 敗戦・セーブ・出場試合数も通算へ残す（従来は年越しで消えていた）。盗塁死（sbf）も今季→通算へ積算する（従来は生成時・年越しリセットの両方で欠落し、通算に残らなかった）
+    p.ss={ab:0,h:0,hr:0,rbi:0,sb:0,sbf:0,ip:0,k:0,er:0,w:0,g:0,l:0,sv:0};
   });
   const retiring=S.players.filter(p=>p.age>=36&&Math.random()<(p.age-35)*0.22);
   retiring.forEach(p=>{
