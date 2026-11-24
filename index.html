@@ -72,7 +72,7 @@
   <div id="commentary"></div>
   <div id="batter-card"></div>
   <div id="pitch-info"></div>
-  <div id="cursor-zone" class="hidden"><div id="cz-label">ミートカーソル（指で動かす）</div><div id="cursor-ring"></div><div id="cursor-ball" class="hidden"></div></div>
+  <div id="cursor-zone" class="hidden" role="region" aria-label="ミートカーソル操作エリア：指でドラッグして金のリングをボールの到達点に合わせる"><div id="cz-label">ミートカーソル（指で動かす）</div><div id="cursor-ring"></div><div id="cursor-ball" class="hidden"></div></div>
   <div id="game-controls">
     <!-- 攻撃時 -->
     <div id="bat-controls" class="gctrl hidden">
@@ -119,7 +119,7 @@
 
 <!-- ===== 試合結果モーダル ===== -->
 <div id="modal" class="hidden">
-  <div id="modal-box">
+  <div id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="modal-title"></div>
     <div id="modal-body"></div>
     <button id="btn-modal-ok" class="btn gold big">OK</button>

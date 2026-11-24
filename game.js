@@ -1105,6 +1105,12 @@ function cleanRace(){ // レース表示前の掃除：自軍所属の実在選�
   const ownedNames=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name));
   S.hrRace=S.hrRace.filter(r=>r.team? !owned.has(r.name+'|'+r.team) : !ownedNames.has(r.name));
 }
+function ensureHrRace(){ // 本塁打王レースの生成（シーズン画面を開いた時だけでなく、シーズン初戦の終了時にも作る。従来は画面を開くまで null のままで、途中の試合から開くと全員0本のレースがその時点から始まっていた）。自軍加入済みの実在選手はレース側に入れない（二重表示防止）。重複判定は名前+球団
+  if(Array.isArray(S.hrRace))return S.hrRace;
+  const ownedNames=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name+'|'+pl.team));
+  S.hrRace=shuffle(REAL_PLAYERS.filter(r=>r.pos!=='投手'&&!ownedNames.has(r.name+'|'+r.team))).slice(0,5).map(r=>({name:r.name,team:r.team,hr:0}));
+  return S.hrRace;
+}
 function renderSeason(){
   const sorted=S.standings.map((t,i)=>({t,i,rate:t.w+t.l?t.w/(t.w+t.l):0})).sort((a,b)=>b.rate-a.rate||b.w-a.w);
   const lead=sorted[0];
@@ -1117,7 +1123,7 @@ function renderSeason(){
   const csNote=(S.phase!=='season'||noGames)?'':(myIdx<=2?'✅ 現在CS圏内（3位以内）！ この調子でキープしよう':'CSライン（3位）まで あと '+(((sorted[2].t.w-meT.w)+(meT.l-sorted[2].t.l))/2).toFixed(1)+' ゲーム差'); // CSラインまでの差（H7）。開幕前（全チーム未消化）は順位が無意味なので出さない
   openPanel('🏆 シーズン順位表（'+S.year+'年目・全24戦）',
    '<div style="overflow-x:auto"><table class="stand"><tr><th>チーム</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>GB</th><th>残</th></tr>'+rows+'</table></div>'+(csNote?'<p class="small" style="margin-top:6px">'+csNote+'</p>':'')+
-   (()=>{if(!S.hrRace){const ownedNames=new Set(S.players.filter(pl=>pl.real).map(pl=>pl.name+'|'+pl.team));S.hrRace=shuffle(REAL_PLAYERS.filter(r=>r.pos!=='投手'&&!ownedNames.has(r.name+'|'+r.team))).slice(0,5).map(r=>({name:r.name,team:r.team,hr:0}));save();} // シャッフルは Fisher-Yates（sort(ランダム) の偏り回避）、重複名は名前+球団で判定 // 開幕時は全員0本（試合ごとに finishMatch で増える）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする。自軍加入済みの実在選手はレース側に入れない（二重表示防止）
+   (()=>{if(!S.hrRace){ensureHrRace();save();} // 生成は ensureHrRace に一本化（試合終了時にも作る）。生成したら保存し、開き直すたびに顔ぶれが変わらないようにする
      cleanRace(); // 加入後にレース側へ残った別人格を除く（C9）
      const mineList=S.players.filter(pl=>pl.kind==='B'&&pl.ss.hr>0).sort((a,b)=>b.ss.hr-a.ss.hr).slice(0,2); // 自軍はトップ2までレースに載せる（従来は1位だけだった）
      const mineNames=new Set(mineList.map(m=>m.name));
@@ -1332,7 +1338,7 @@ function doScout(){
   if(pityBefore+1>=30)toast('🎰 天井到達！ SSR以上確定スカウト！');
   const extra=r.joined?playerCard(p,rosterExtra(p)):'<br>枠がいっぱいのため見送り、代わりに TP+5'; // 結果画面からそのまま特訓・戦力外へ行ける（N53）
   if(p.rarity==='SSR'||p.rarity==='LEGEND'){flash();banner(p.rarity+' 出現！！');vib('0,80,60,160');popupN(p.rarity+'!','#ffd94d');}
-  S.news.unshift(p.rarity+' の'+(r.kind==='P'?'投手':'選手')+' '+p.name+' を発掘！');save();refreshHUD();
+  S.news.unshift(r.joined?(p.rarity+' の'+(r.kind==='P'?'投手':'選手')+' '+p.name+' を発掘！'):(p.name+'（'+p.rarity+'）は登録枠が満杯で見送り、代わりにTP+5'));save();refreshHUD(); // 枠満杯で加入していない選手を「発掘！」と報じない（結果画面の見送り表示とニュースを一致させる）
   renderScout('<div class="gacha-result">✨ 結果 ✨</div>'+extra);
 }
 function scoutLineExpand(el,pid){ // 10連結果の1行表示をタップでカードに展開する。選手が既に在籍していない場合は落ちずに知らせる
@@ -1705,15 +1711,19 @@ function applyOutcome(side,outcome){
   if(isMe&&runs>0){const gs2=M.gameStats[batter.id]=M.gameStats[batter.id]||{h:0,hr:0,rbi:0,k:0};gs2.rbi+=runs;}
   if(outcome==='BB'&&isMe)recPA(batter.id,r=>{});
   if(isMe){const wasAhead=M.score.me>M.score.cpu;M.score.me+=runs;if(runs>0&&!wasAhead&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id;} // リードを「奪った」瞬間の投手だけを勝ち投手候補にする（E24改：リード中の追加点で上書きすると、先発が作ったリードを継投投手の勝ち星にしてしまう）
-  else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu+=runs;if(runs>0&&!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id;let erR=runs; // 決勝点を奪われた投手（敗戦投手）も同じく「奪われた瞬間」で記録する
-    if(M._inheritedLeft>0){const take=Math.min(erR,M._inheritedLeft);const ip=S.players.find(x=>x.id===M._inheritedPid);if(ip)ip.ss.er+=take;M._inheritedLeft-=take;erR-=take;} // 残した走者の得点は降板投手の自責（E3）
-    M.pit.er+=erR;M.teamEr=(M.teamEr||0)+runs;}
+  else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu+=runs;if(runs>0&&!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id; // 決勝点を奪われた投手（敗戦投手）も同じく「奪われた瞬間」で記録する
+    chargeCpuEr(runs);M.teamEr=(M.teamEr||0)+runs;}
   if(runs>0&&M.lines){const arr=isMe?M.lines.me:M.lines.cpu;arr[M.inning-1]=(arr[M.inning-1]||0)+runs;}
   if(runs>0)sayAdd('🎉 '+runs+'点入った！ スコア '+M.score.cpu+' - '+M.score.me);
   updateRunners3D();updateSB();
   return runs;
 }
 function sayAdd(t){say($('commentary').innerHTML+'<br>'+t);} // say側で自動スクロールするので追記時も最新行が見える
+function chargeCpuEr(runs){ // 相手の得点の自責配分：継投で残した走者の分は降板投手へ先に付け、残りを現投手へ（E3。通常の得点経路だけでなく犠飛・暴投経路でも同じ配分にする）
+  let erR=runs;
+  if(M._inheritedLeft>0){const take=Math.min(erR,M._inheritedLeft);const ip=S.players.find(x=>x.id===M._inheritedPid);if(ip)ip.ss.er+=take;M._inheritedLeft-=take;erR-=take;}
+  M.pit.er+=erR;
+}
 function runnerRun(idx,isMe){const id=M.bases[idx];if(id==null||id===true)return 55;const p=isMe?S.players.find(x=>x.id===id):(M.opp?M.opp.batters.find(x=>x.id===id):null);return p?p.run:55;} // 塁上走者本人の走力（E4）
 function outPlayExtras(isMe,deep,outsBefore){ // 凡退時の併殺と犠牲フライ（E2/E17：従来は併殺がデッドコードで一生起きず、犠飛も存在しなかった）
   if(outsBefore>1)return;
@@ -1721,7 +1731,7 @@ function outPlayExtras(isMe,deep,outsBefore){ // 凡退時の併殺と犠牲フ�
     M.bases[2]=null;
     if(isMe)recPA(curMyBatter().id,r=>{r.ab=Math.max(0,(r.ab||0)-1);});else recCpuPA(curCpuBatter().id,r=>{r.ab=Math.max(0,(r.ab||0)-1);}); // 犠牲フライは公式に打数へ数えない（呼び出し側で凡退として ab+1 済みなので打ち消す）
     if(isMe){const wasAhead=M.score.me>M.score.cpu;M.score.me++;if(!wasAhead&&M.score.me>M.score.cpu&&M.starter)M._leadPid=M.starter.id;const bt=curMyBatter();recPA(bt.id,r=>{r.rbi++;});const gs=M.gameStats[bt.id]=M.gameStats[bt.id]||{h:0,hr:0,rbi:0,k:0};gs.rbi++;} // 犠飛の勝ち越しも勝ち投手記録の対象（従来はこの経路だけ _leadPid が付かなかった）
-    else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu++;if(!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id;M.pit.er++;M.teamEr=(M.teamEr||0)+1;}
+    else{const wasCpuAhead=M.score.cpu>M.score.me;M.score.cpu++;if(!wasCpuAhead&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id;chargeCpuEr(1);M.teamEr=(M.teamEr||0)+1;} // 犠飛の1点も通常の得点と同じ自責配分にする（従来は三塁走者が継投で残した走者でも現投手の自責になっていた）
     if(M.lines){const arr=isMe?M.lines.me:M.lines.cpu;arr[M.inning-1]=(arr[M.inning-1]||0)+1;}
     sayAdd('犠牲フライ！ 三塁走者が生還！ スコア '+M.score.cpu+' - '+M.score.me);updateSB();updateRunners3D();return;
   }
@@ -2224,7 +2234,7 @@ function flushPitcherStats(){
   // 継投時：ここまでの投手成績を降板投手へ精算する（E3：回途中のアウトも現投手のものとして数える。旧実装は半回終了時の+3一括で付け替えがずれていた）
   const st=M&&M.starter;if(!st)return;
   (M._relievedStats=M._relievedStats||[]).push({id:st.id,ip:M.pit.outs+(M.outs-(M._pitCounted||0)),k:M.pit.k,er:M.pit.er}); // 降板投手の成績は ss へ即時確定せず、試合終了時に一括反映する（打撃・盗塁と同じタイミング。従来は継投直後のセーブで、無かったことになる試合の投手記録だけが残る不整合があった）
-  (M._expPitchers=M._expPitchers||[]).push({id:st.id,outs:M.pit.outs+(M.outs-(M._pitCounted||0)),k:M.pit.k}); // 降板投手の経験値用に投球内容を控える（E6）
+  (M._expPitchers=M._expPitchers||[]).push({id:st.id,outs:M.pit.outs+(M.outs-(M._pitCounted||0)),k:M.pit.k,er:M.pit.er}); // 降板投手の経験値用に投球内容を控える（E6）。自責点も控えて、投手MVPスコアの計算で降板分も差し引けるようにする（従来は現投手の自責しか引かれず、継投で荒れた試合ほど先発のMVPスコアが過大になっていた）
   M.pitGame=M.pitGame||{k:0,er:0};M.pitGame.k+=M.pit.k;M.pitGame.er+=M.pit.er; // チーム全体の当日投手成績（N28）
   M.pit={outs:0,k:0,er:0};M._pitCounted=M.outs;
   const nb=M.bases.filter(b=>b).length;
@@ -2381,6 +2391,7 @@ function resolveCpuPitch(quality){
     const sf=M.bases[1]&&!M.bases[2]?1:(M.bases[0]&&!M.bases[1]?0:-1);
     if(sf>=0){const rid=M.bases[sf];const rn=(typeof rid==='string')?M.opp.batters.find(x=>x.id===rid):null;
       if(rn&&rn.run>=72&&Math.random()<0.28){
+        M.myPitches++; // 盗塁で解決した1球も、実際に投げた球として球数に数える（暴投・死球と同じ扱い。従来はこの分岐だけ球数が増えず、自軍投手の疲労判定が遅れた）
         M.bases[sf]=null;
         if(Math.random()<stealProb(rn,rn.run)){M.bases[sf+1]=rid;say('実況：相手が盗塁！ '+rn.name+' がスタートを切った！');sfx('hit');} // 成功率は自軍と同じ stealProb で（特技「韋駄天」の+8%も相手に効く。従来は自前の式で特技が無視されていた）
         else{M.outs++;say('実況：盗塁を刺した！ 相手の足を封じた！');sfx('out');}
@@ -2391,6 +2402,7 @@ function resolveCpuPitch(quality){
       }}
     const cb0=curCpuBatter();
     if(M.outs<2&&M.bases[0]&&!M.bases[1]&&M.inning>=M.maxInn-1&&Math.abs(M.score.me-M.score.cpu)<=1&&cb0.meet>=55&&Math.random()<0.3){ // 送りバントは2アウトでは成立しない（打者アウトでチェンジ）ので、盗塁と違って2アウト未満だけ
+      M.myPitches++; // バントで解決した1球も球数に数える（相手盗塁の分岐と揃える）
       say('実況：相手が送りバント！ 走者を進めてきた。');applyOutcome('cpu','SAC');paEnd();return;
     }
   }
@@ -2398,7 +2410,7 @@ function resolveCpuPitch(quality){
     M.myPitches++; // 実際に投げた球なので球数に数える（従来は通常投球の加算より前に return し、疲労にも配球記憶にも残らなかった）
     let runs=0;const nb=[null,M.bases[0],M.bases[1]];if(M.bases[2])runs=1;M.bases=nb;
     if(runs){const wasCpuAheadW=M.score.cpu>M.score.me;M.score.cpu++;if(!wasCpuAheadW&&M.score.cpu>M.score.me&&M.starter)M._cpuLeadPid=M.starter.id; // 暴投での勝ち越しも敗戦投手判定の対象にする（従来はこの経路だけ _cpuLeadPid が付かず、最終投手に敗戦が付くことがあった）
-    M.pit.er++;M.teamEr=(M.teamEr||0)+1;if(M.lines)M.lines.cpu[M.inning-1]=(M.lines.cpu[M.inning-1]||0)+1;}
+    chargeCpuEr(1);M.teamEr=(M.teamEr||0)+1;if(M.lines)M.lines.cpu[M.inning-1]=(M.lines.cpu[M.inning-1]||0)+1;} // 暴投の1点も通常の得点と同じ自責配分にする（犠飛経路と揃える）
     say('実況：暴投！ 球が大きく逸れて走者が進んだ！'+(runs?' 1点入った…':''));sfx('out');updateRunners3D();updateSB();M.busy=false;renderPitchButtons();return;
   }
   if(quality==='bad'&&Math.random()<0.05){ // 死球（自軍打者には calledPitch 側で起きるのに、相手打者には一生起きなかった非対称の解消。大きく逸れた球の一部が打者に当たる）
@@ -2529,6 +2541,7 @@ function simHalf(){
   }
   updateRunners3D();buildStadium();updateSB();
   say('実況：シミュレーションで回が進んだ。スコア '+M.score.cpu+' - '+M.score.me);
+  if(checkGameEnd())return; // 3アウトでハーフが切り替わった直後はループ内の打席単位チェックを通らないため、ここでも終了判定する（従来は最終回表をシミュで終えても裏の攻撃が余分に1打席始まっていた）
   if(!M.finished){M.busy=false;later(nextPA,500);}
 }
 function simGame(){
@@ -2585,7 +2598,7 @@ function finishMatch(){
   // 報酬（MVPボーナス+50も「獲得コイン」に合算し、表示と実額を一致させる）
   const mvpBat=Object.keys(M.pa).reduce((a,id)=>{const p=S.players.find(x=>x.id==id);if(!p)return a;const r=M.pa[id];const v=r.h*2+r.hr*5+r.rbi;return v>(a.v||-1)?{p,v}:a;},{}); // MVP候補は打席に立った全員（従来は終了時点のラインナップだけで、代打・代走で退いた選手の活躍が対象外だった）
   // 投手もMVP候補に（E23：完封・大量奪三振の投手が報われるように）。スコア＝投球アウト数＋奪三振×2−自責×3
-  const pitScore=M.pit.outs+M.pit.k*2-M.pit.er*3+(M._expPitchers||[]).reduce((s,r)=>s+r.outs+r.k*2,0); // M.pit.outs は冒頭で未精算分まで加算済み（従来は現回のアウトを二重に数えていた）
+  const pitScore=M.pit.outs+M.pit.k*2-M.pit.er*3+(M._expPitchers||[]).reduce((s,r)=>s+r.outs+r.k*2-(r.er||0)*3,0); // M.pit.outs は冒頭で未精算分まで加算済み（従来は現回のアウトを二重に数えていた）。降板投手の自責も現投手と同じく1点=-3で差し引く
   const pitMvpOk=(M.teamEr||0)<=3||pitScore>=18; // 大量失点した投手はMVPにしない（0-7完封負けで7失点の投手がMVP+50コインになる不自然さの解消。快投なら失点が多くても対象）
   const mvp=(pitMvpOk&&pitScore>(mvpBat.v||0)&&st)?{p:st,v:pitScore,pitcher:true}:mvpBat;
   const gate=Math.round(S.fans*0.004)+S.stadiumLv*6; // 観客収入（チケット）：球場パネルの説明どおり、ファンと球場Lvが試合報酬にも効く（C10）
@@ -2617,8 +2630,8 @@ function finishMatch(){
   // ライバル撃破ボーナス
   let rivalNote='';
   if(S.rival&&(M._oppStarterName||(M.opp.pitcher&&M.opp.pitcher.name))===S.rival&&win){S.coins+=100;rivalNote='<br>🔥 宿敵 '+S.rival+' を撃破！ ボーナス+100';} // 宿敵判定は「相手先発」で行う（開始モーダルの約束どおり。従来は終了時点の投手で判定し、相手が継投すると先発の宿敵を攻略して勝ってもボーナスが消えた）
-  // 本塁打王レース（シーズン中）
-  if(S.hrRace&&M.phase==='season'){S.hrRace.forEach(r=>{if(Math.random()<0.55)r.hr+=ri(0,2);});}
+  // 本塁打王レース（シーズン中）：レースが未生成なら初戦の終了時点で作ってから進める（従来はシーズン画面を開くまで本数が一切増えなかった）
+  if(M.phase==='season'){ensureHrRace();S.hrRace.forEach(r=>{if(Math.random()<0.55)r.hr+=ri(0,2);});}
   // シーズン戦なら順位表へ
   let seasonNote='';
   if(M.phase==='season'){
