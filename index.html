@@ -59,7 +59,7 @@
 <section id="screen-game" class="screen hidden">
   <div id="scoreboard">
     <div id="sb-teams"></div>
-    <div id="sb-situation">
+    <div id="sb-situation" aria-live="polite">
       <span id="sb-inning">1回表</span>
       <span id="sb-outs">アウト ●○○</span>
       <span id="sb-count">B○○○○ S○○○</span>
@@ -69,7 +69,7 @@
   </div>
   <div id="intro-telop" class="hidden"></div>
   <input type="file" id="photo-input" accept="image/*" class="hidden">
-  <div id="commentary"></div>
+  <div id="commentary" aria-live="polite"></div>
   <div id="batter-card"></div>
   <div id="pitch-info"></div>
   <div id="cursor-zone" class="hidden" role="region" tabindex="0" aria-label="ミートカーソル操作エリア：指でドラッグするか、フォーカスして矢印キーで、金のリングをボールの到達点に合わせる"><div id="cz-label">ミートカーソル（指で動かす／矢印キーでも可）</div><div id="cursor-ring"></div><div id="cursor-ball" class="hidden"></div></div>
