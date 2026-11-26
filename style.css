@@ -25,6 +25,7 @@
   --r-card:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+textarea{user-select:text;-webkit-user-select:text} /* セーブ書き出し/復元のテキスト欄だけは選択・コピーできるようにする（全要素 none のままだとフォールバックのコピーが環境によりできなかった） */
 html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--nv0);font-family:'MPlus',sans-serif;color:var(--txt)}
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 /* 映画っぽいビネット */
