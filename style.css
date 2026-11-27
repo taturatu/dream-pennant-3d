@@ -256,7 +256,8 @@ select.sort-sel{background:#0c1a2c;color:#eaf4ff;border:1.5px solid #3f74b5;bord
 @media (orientation:portrait){
   #scoreboard{left:50%;transform:translateX(-50%);width:94vw;max-width:94vw;min-width:0;padding:5px 8px}
   #sb-lines{font-size:10px}
-  #commentary{top:auto;bottom:128px;left:50%;transform:translateX(-50%);width:94vw;max-height:20vh}
+  #commentary{top:auto;bottom:128px;left:50%;transform:translateX(-50%);width:94vw;max-height:104px} /* 最長でも打者カード（bottom:236px）の下端に届かない高さに抑える（20vhだと1024px丈で約204pxになり重なった） */
+  #screen-game:has(#cursor-zone:not(.hidden)) #pitch-info{visibility:hidden} /* 縦持ちでは投球情報（最大5行）とカーソルゾーンが常時約40px重なるため、カーソル表示中は実況と同じく投球情報を退ける */
   #batter-card{left:50%;transform:translateX(-50%);width:94vw;bottom:236px}
   #pitch-info{left:50%;transform:translateX(-50%);width:94vw;text-align:center;bottom:352px}
   #cursor-zone{right:auto;left:50%;transform:translateX(-50%);bottom:250px}
@@ -355,7 +356,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
   #batter-card{bottom:226px}
   #screen-game:has(#pitch-controls:not(.hidden)) #batter-card{bottom:216px}
   #screen-game:has(#pitch-controls:not(.hidden)):has(#aim-zone:not(.hidden)) #batter-card{bottom:376px}
-  #screen-game:has(#cursor-zone:not(.hidden)) #commentary{visibility:hidden} /* 投球中は実況を消してカーソルゾーンの場所を空ける（縦持ちの段積み対策） */
+  #screen-game:has(#cursor-zone:not(.hidden)) #commentary,
+  #screen-game:has(#cursor-zone:not(.hidden)) #pitch-info{visibility:hidden} /* 投球中は実況と投球情報を消してカーソルゾーンの場所を空ける（縦持ちの段積み対策。投球情報は配球履歴・疲労警告が付くと5行まで伸び、3行前提で置いたカーソルゾーンと再び重なった） */
   #screen-game:has(#pitch-controls:not(.hidden)):has(#aim-zone:not(.hidden)) #commentary,
   #screen-game:has(#pitch-controls:not(.hidden)):has(#aim-zone:not(.hidden)) #pitch-info{visibility:hidden} /* 狙いコース選択中は上の情報を消して場所を空ける（守備中のみ：:hasは非表示の親も見るため複合条件にする） */
   #pitch-info{bottom:326px;font-size:12px;padding:5px 8px}
