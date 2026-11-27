@@ -360,7 +360,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
   #screen-game:has(#pitch-controls:not(.hidden)):has(#aim-zone:not(.hidden)) #pitch-info{visibility:hidden} /* 狙いコース選択中は上の情報を消して場所を空ける（守備中のみ：:hasは非表示の親も見るため複合条件にする） */
   #pitch-info{bottom:326px;font-size:12px;padding:5px 8px}
   #screen-game:has(#pitch-controls:not(.hidden)) #pitch-info{bottom:322px}
-  #cursor-zone{bottom:376px;width:110px;height:124px}
+  #cursor-zone{bottom:396px;width:110px;height:124px} /* pitch-info（bottom:326px・3行時は高さ約66pxで上端が約392px）より上に逃がす。従来は 376px で16px重なり、投球情報ボックスがカーソルゾーン下端に被っていた */
 #pitch-select{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:96vw;padding-bottom:2px}
   .pitch-btn{flex:0 0 auto;min-height:38px;padding:5px 10px;font-size:12.5px}
   #aim-grid{grid-template-columns:repeat(3,26px)}
