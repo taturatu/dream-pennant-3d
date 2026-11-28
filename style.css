@@ -111,6 +111,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;-webkit-user
 #batter-card{position:absolute;left:10px;bottom:128px;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 45%),linear-gradient(180deg,rgba(5,10,18,.94),rgba(5,10,18,.87));border-left:4px solid var(--sky);border-radius:0 8px 8px 0;padding:8px 12px;font-size:12px;line-height:1.5;font-weight:800;box-shadow:0 10px 26px rgba(0,0,0,.55)}
 #batter-card .rare{color:#ff9ff3}
 #screen-game:has(#pitch-controls:not(.hidden)) #batter-card{bottom:252px} /* 守備時は球種ボタン（2段＋継投）と打者カードが重ならないようカードを上へ逃がす */
+#screen-game:has(#pitch-controls:not(.hidden)):has(#aim-zone:not(.hidden)) #batter-card{bottom:376px} /* 狙いグリッド表示時は操作系がさらに縦に伸びるため、通常レイアウトでもカードを追加で逃がす（低丈・縦持ちブロックと同じ方式） */
 #pitch-info{position:absolute;right:10px;bottom:128px;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 45%),linear-gradient(180deg,rgba(148,18,18,.95),rgba(92,7,7,.95));border:1px solid rgba(255,255,255,.32);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:800;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.55)}
 #cursor-zone{position:absolute;right:12px;bottom:196px;width:118px;height:142px;border:2.5px solid rgba(255,255,255,.92);border-radius:8px;background:linear-gradient(rgba(13,26,44,.36),rgba(13,26,44,.36)),repeating-linear-gradient(0deg,transparent 0 46px,rgba(255,255,255,.28) 46px 48px),repeating-linear-gradient(90deg,transparent 0 38px,rgba(255,255,255,.28) 38px 40px);z-index:44;touch-action:none;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 22px rgba(120,190,255,.3),0 10px 26px rgba(0,0,0,.5)}
 #cz-label{position:absolute;top:-19px;right:0;font-size:10.5px;font-weight:800;color:#fff;text-shadow:0 1px 3px #000;white-space:nowrap;text-align:right}
@@ -142,7 +143,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;-webkit-user
 #meter-sweet{position:absolute;left:43%;width:14%;top:0;bottom:0;background:linear-gradient(180deg,#fff3a0,var(--gold) 55%,var(--gold-2));box-shadow:0 0 16px rgba(255,217,77,.85)}
 #meter-needle{position:absolute;top:0;bottom:0;width:5px;background:#ff3b30;left:0;box-shadow:0 0 8px rgba(255,59,48,.9);border-radius:3px}
 .meter-label{font-size:11px;margin-top:3px;text-shadow:0 1px 3px #000}
-#game-sub-controls{display:flex;gap:7px}
+#game-sub-controls{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:96vw} /* 狭幅では折り返して端のボタンが画面外に切れないようにする */
 
 /* ===== パネル：放送ロワーテロップ風ヘッダー ===== */
 #screen-panel{display:flex;align-items:center;justify-content:center;background:rgba(1,4,8,.68);backdrop-filter:blur(3px);z-index:50;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -274,6 +275,7 @@ select.sort-sel{background:#0c1a2c;color:#eaf4ff;border:1.5px solid #3f74b5;bord
 }
 /* キーボード操作時のフォーカス表示（H24） */
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#cursor-zone:focus-visible{outline:2px solid var(--gold);outline-offset:2px} /* ミートカーソル領域（div）にもフォーカス表示を付け、矢印キーが効く状態か分かるようにする */
 
 /* ============================================================
    スマホ対応：タッチ端末のタップ領域を指で押しやすい大きさに
@@ -364,9 +366,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
   #screen-game:has(#pitch-controls:not(.hidden)) #pitch-info{bottom:322px}
   #cursor-zone{bottom:396px;width:110px;height:124px} /* pitch-info（bottom:326px・3行時は高さ約66pxで上端が約392px）より上に逃がす。従来は 376px で16px重なり、投球情報ボックスがカーソルゾーン下端に被っていた */
 #pitch-select{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:96vw;padding-bottom:2px}
-  .pitch-btn{flex:0 0 auto;min-height:38px;padding:5px 10px;font-size:12.5px}
-  #aim-grid{grid-template-columns:repeat(3,26px)}
-  .aim-cell{height:26px}
+  .pitch-btn{flex:0 0 auto;min-height:42px;padding:5px 10px;font-size:12.5px}
+  #aim-grid{grid-template-columns:repeat(3,32px)}
+  .aim-cell{height:32px}
   .aim-label{font-size:10px}
   #btn-ibb{min-height:38px}
   #btn-relief{font-size:12.5px;padding:7px 10px}
